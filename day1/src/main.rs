@@ -4,7 +4,7 @@ use std::io;
 use std::io::prelude::*;
 
 struct Cpu {
-    xregs: [u64; 32],
+    regs: [u64; 32],
     pc: u64,
     memory: Vec<u8>,
 }
@@ -12,7 +12,7 @@ struct Cpu {
 impl Cpu {
     fn new(memory: Vec<u8>) -> Self {
         Self {
-            xregs: [0; 32],
+            regs: [0; 32],
             pc: 0,
             memory: memory,
         }
@@ -27,13 +27,13 @@ impl Cpu {
                 format!(
                     "x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x}",
                     i,
-                    self.xregs[i],
+                    self.regs[i],
                     i + 1,
-                    self.xregs[i + 1],
+                    self.regs[i + 1],
                     i + 2,
-                    self.xregs[i + 2],
+                    self.regs[i + 2],
                     i + 3,
-                    self.xregs[i + 3],
+                    self.regs[i + 3],
                 )
             );
         }
@@ -58,11 +58,11 @@ impl Cpu {
             0x13 => {
                 // addi
                 let imm = ((inst & 0xfff00000) as i32 as i64 >> 20) as u64;
-                self.xregs[rd] = self.xregs[rs1] + imm;
+                self.regs[rd] = self.regs[rs1] + imm;
             }
             0x33 => {
                 // add
-                self.xregs[rd] = self.xregs[rs1] + self.xregs[rs2];
+                self.regs[rd] = self.regs[rs1] + self.regs[rs2];
             }
             _ => {
                 dbg!("not implemented yet");

@@ -65,7 +65,7 @@ impl Cpu {
                 self.regs[rd] = self.regs[rs1] + self.regs[rs2];
             }
             _ => {
-                dbg!("not implemented yet");
+                dbg!(format!("not implemented yet: opcode {:#x}", opcode));
             }
         }
     }

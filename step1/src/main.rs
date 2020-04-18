@@ -10,11 +10,11 @@ struct Cpu {
 }
 
 impl Cpu {
-    fn new(memory: Vec<u8>) -> Self {
+    fn new(binary: Vec<u8>) -> Self {
         Self {
             regs: [0; 32],
             pc: 0,
-            memory: memory,
+            memory: binary,
         }
     }
 
@@ -78,10 +78,10 @@ fn main() -> io::Result<()> {
         panic!("Usage: rvemu-simple <filename>");
     }
     let mut file = File::open(&args[1])?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    let mut binary = Vec::new();
+    file.read_to_end(&mut binary)?;
 
-    let mut cpu = Cpu::new(buffer);
+    let mut cpu = Cpu::new(binary);
 
     while cpu.pc < cpu.memory.len() as u64 {
         // 1. Fetch.

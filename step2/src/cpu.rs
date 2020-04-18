@@ -174,30 +174,11 @@ impl Cpu {
             }
             0x63 => {
                 // imm[12|10:5|4:1|11] = inst[31|30:25|11:8|7]
-                let imm = (((inst & 0x80000000) as i32 as i64 >> 31) as u64)
-                    | ((inst >> 20) & 0x7e0)
+                let imm = (((inst & 0x80000000) as i32 as i64 >> 19) as u64)
+                    | ((inst >> 20) & 0xfc0)
                     | ((inst >> 7) & 0x1e)
-                    | ((inst & 0x8) << 4);
+                    | ((inst & 0x4) << 4);
 
-                let imm12 = (((inst & 0x80000000) as i32) as i64) >> 31;
-                let imm10_5 = (inst & 0x7e000000) >> 25;
-                //let imm10_5 = (inst >> 25) & 0x3f;
-                let imm4_1 = (inst & 0x00000f00) >> 8;
-                //let imm4_1 = (inst >> 8) & 0xf;
-                let imm11 = (inst & 0x00000080) >> 7;
-                let offset =
-                    ((imm12 << 12) as u64 | (imm11 << 11) | (imm10_5 << 5) | (imm4_1 << 1)) as i64;
-
-                println!(
-                    "imm10_5: {:#x} {:#x} imm4_1: {:#x} {:#x} imm11: {:#x} {:#x}",
-                    imm10_5 << 5,
-                    ((inst >> 20) & 0x3f),
-                    imm4_1 << 1,
-                    ((inst >> 7) & 0xf),
-                    imm11 << 11,
-                    ((inst & 0x8) << 4)
-                );
-                println!("inst {:#b} imm: {:#x} offset: {:#x}", inst, imm, offset);
                 match funct3 {
                     0x0 => {
                         // beq
@@ -244,9 +225,10 @@ impl Cpu {
 
                 // imm[20|10:1|11|19:12] = inst[31|30:21|20|19:12]
                 let imm = (((inst & 0x80000000) as i32 as i64 >> 11) as u64)
-                    | ((inst >> 20) & 0x3ff)
-                    | ((inst >> 9) & 0x1)
+                    | ((inst >> 20) & 0xffe)
+                    | ((inst >> 9) & 0x400)
                     | (inst & 0xff000);
+
                 self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
             }
             _ => {

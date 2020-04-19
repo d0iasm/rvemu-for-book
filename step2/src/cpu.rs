@@ -130,6 +130,9 @@ impl Cpu {
         let funct3 = (inst & 0x00007000) >> 12;
         let funct7 = (inst & 0xfe000000) >> 25;
 
+        // The value in x0 register is always 0. This is a workaround.
+        self.regs[0] = 0;
+
         match opcode {
             0x03 => {
                 // imm[11:0] = inst[31:20]

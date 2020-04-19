@@ -23,14 +23,24 @@ fn main() -> io::Result<()> {
         // 1. Fetch.
         let inst = cpu.fetch();
 
-        println!("inst: {:#x}", inst);
+        //println!("inst: {:#x}", inst);
 
         // 2. Add 4 to the program counter.
         cpu.pc += 4;
 
         // 3. Decode.
         // 4. Execute.
-        cpu.execute(inst);
+        match cpu.execute(inst) {
+            true => break,
+            false => {}
+        };
+
+        //println!("inst: {:#x}", inst);
+
+        // Workaround for avoiding an infinite loop.
+        if cpu.pc == 0 {
+            break;
+        }
     }
     cpu.dump_registers();
 

@@ -3,13 +3,18 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
+/// The CPU to contain registers, a program coutner, and memory.
 struct Cpu {
+    /// 32 64-bit integer registers.
     regs: [u64; 32],
+    /// Program counter to hold the the memory address of the next instruction that would be executed.
     pc: u64,
+    /// Computer memory to store executable instructions.
     memory: Vec<u8>,
 }
 
 impl Cpu {
+    /// Create a new `Cpu` object.
     fn new(binary: Vec<u8>) -> Self {
         Self {
             regs: [0; 32],
@@ -18,6 +23,7 @@ impl Cpu {
         }
     }
 
+    /// Print values in all registers (x0-x31).
     fn dump_registers(&self) {
         let mut output = String::from("");
         for i in (0..32).step_by(4) {
@@ -40,6 +46,7 @@ impl Cpu {
         println!("{}", output);
     }
 
+    /// Get an instruction from the memory.
     fn fetch(&self) -> u32 {
         let index = self.pc as usize;
         return (self.memory[index] as u32)
@@ -48,6 +55,7 @@ impl Cpu {
             | ((self.memory[index + 3] as u32) << 24);
     }
 
+    /// Execute an instruction after decoding.
     fn execute(&mut self, inst: u32) {
         let opcode = inst & 0x0000007f;
         let rd = ((inst & 0x00000f80) >> 7) as usize;

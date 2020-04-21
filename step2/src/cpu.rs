@@ -1,13 +1,20 @@
-// Default memory size (128MiB).
+//! The cpu module contains `Cpu` and implementarion for it.
+
+/// Default memory size (128MiB).
 pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
 
+/// The CPU to contain registers, a program coutner, and memory.
 pub struct Cpu {
+    /// 32 64-bit integer registers.
     pub regs: [u64; 32],
+    /// Program counter to hold the the memory address of the next instruction that would be executed.
     pub pc: u64,
+    /// Computer memory to store executable instructions and the stack region.
     pub memory: Vec<u8>,
 }
 
 impl Cpu {
+    /// Create a new `Cpu` object.
     pub fn new(binary: Vec<u8>) -> Self {
         let mut memory = vec![0; MEMORY_SIZE as usize];
         memory.splice(..binary.len(), binary.iter().cloned());
@@ -23,6 +30,7 @@ impl Cpu {
         }
     }
 
+    /// Print values in all registers (x0-x31).
     pub fn dump_registers(&self) {
         let mut output = String::from("");
         for i in (0..32).step_by(4) {
@@ -113,7 +121,7 @@ impl Cpu {
         self.memory[index + 7] = ((val >> 56) & 0xff) as u8;
     }
 
-    /// Fetch an instruction from the memory.
+    /// Get an instruction from the memory.
     pub fn fetch(&self) -> u32 {
         return self.read32(self.pc) as u32;
     }
@@ -180,9 +188,8 @@ impl Cpu {
             0x13 => {
                 // imm[11:0] = inst[31:20]
                 let imm = ((inst & 0xfff00000) as i32 as i64 >> 20) as u64;
-                // shamt size is 5 bits for RV32I and 6 bits for RV64I.
-                let shamt = ((inst & 0x03f00000) >> 20) as u32;
-                let funct6 = funct7 >> 1;
+                // "The shift amount is encoded in the lower 6 bits of the I-immediate field for RV64I."
+                let shamt = (imm & 0x3f) as u32;
                 match funct3 {
                     0x0 => {
                         // addi
@@ -209,7 +216,7 @@ impl Cpu {
                         self.regs[rd] = self.regs[rs1] ^ imm;
                     }
                     0x5 => {
-                        match funct6 {
+                        match funct7 >> 1 {
                             // srli
                             0x00 => self.regs[rd] = self.regs[rs1].wrapping_shr(shamt),
                             // srai
@@ -261,7 +268,6 @@ impl Cpu {
                 }
             }
             0x23 => {
-                // S-type (RV32I)
                 // imm[11:5|4:0] = inst[31:25|11:7]
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
@@ -274,7 +280,6 @@ impl Cpu {
                 }
             }
             0x33 => {
-                // R-type (RV64I and RV64M)
                 // "SLL, SRL, and SRA perform logical left, logical right, and arithmetic right
                 // shifts on the value in register rs1 by the shift amount held in register rs2.
                 // In RV64I, only the low 6 bits of rs2 are considered for the shift amount."
@@ -318,8 +323,8 @@ impl Cpu {
                     }
                     (0x5, 0x20) => {
                         // sra
-                        self.regs[rd] = (self.regs[rs1] as i64).wrapping_shr(shamt) as u64
-                    } // sra
+                        self.regs[rd] = (self.regs[rs1] as i64).wrapping_shr(shamt) as u64;
+                    }
                     (0x6, 0x00) => {
                         // or
                         self.regs[rd] = self.regs[rs1] | self.regs[rs2];
@@ -336,7 +341,7 @@ impl Cpu {
                 self.regs[rd] = (inst & 0xfffff000) as i32 as i64 as u64;
             }
             0x3b => {
-                // The shift amount is given by rs2[4:0].
+                // "The shift amount is given by rs2[4:0]."
                 let shamt = (self.regs[rs2] & 0x1f) as u32;
                 match (funct3, funct7) {
                     (0x0, 0x00) => {
@@ -351,11 +356,11 @@ impl Cpu {
                     }
                     (0x1, 0x00) => {
                         // sllw
-                        self.regs[rd] = ((self.regs[rs1] as u32) << shamt) as i32 as u64;
+                        self.regs[rd] = (self.regs[rs1] as u32).wrapping_shl(shamt) as i32 as u64;
                     }
                     (0x5, 0x00) => {
                         // srlw
-                        self.regs[rd] = ((self.regs[rs1] as u32) >> shamt) as i32 as u64;
+                        self.regs[rd] = (self.regs[rs1] as u32).wrapping_shr(shamt) as i32 as u64;
                     }
                     (0x5, 0x20) => {
                         // sraw

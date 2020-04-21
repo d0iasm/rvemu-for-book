@@ -23,8 +23,6 @@ fn main() -> io::Result<()> {
         // 1. Fetch.
         let inst = cpu.fetch();
 
-        //println!("inst: {:#x}", inst);
-
         // 2. Add 4 to the program counter.
         cpu.pc += 4;
 
@@ -35,9 +33,7 @@ fn main() -> io::Result<()> {
             false => {}
         };
 
-        //println!("inst: {:#x}", inst);
-
-        // Workaround for avoiding an infinite loop.
+        // This is a workaround for avoiding an infinite loop.
         if cpu.pc == 0 {
             break;
         }

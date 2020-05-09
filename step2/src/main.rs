@@ -1,4 +1,4 @@
-pub mod cpu;
+mod cpu;
 
 use std::env;
 use std::fs::File;
@@ -29,6 +29,7 @@ fn main() -> io::Result<()> {
         // 3. Decode.
         // 4. Execute.
         match cpu.execute(inst) {
+            // True if an error happens.
             true => break,
             false => {}
         };

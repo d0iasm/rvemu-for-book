@@ -138,7 +138,7 @@ impl Cpu {
         let funct3 = (inst & 0x00007000) >> 12;
         let funct7 = (inst & 0xfe000000) >> 25;
 
-        // The value in x0 register is always 0. This is a workaround.
+        // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;
 
         match opcode {

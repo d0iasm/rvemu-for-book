@@ -3,6 +3,9 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
+/// Default memory size (128MiB).
+pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
+
 /// The CPU to contain registers, a program coutner, and memory.
 struct Cpu {
     /// 32 64-bit integer registers.
@@ -16,8 +19,11 @@ struct Cpu {
 impl Cpu {
     /// Create a new `Cpu` object.
     fn new(binary: Vec<u8>) -> Self {
+        let mut regs = [0; 32];
+        regs[2] = MEMORY_SIZE;
+
         Self {
-            regs: [0; 32],
+            regs,
             pc: 0,
             memory: binary,
         }
@@ -61,6 +67,9 @@ impl Cpu {
         let rd = ((inst & 0x00000f80) >> 7) as usize;
         let rs1 = ((inst & 0x000f8000) >> 15) as usize;
         let rs2 = ((inst & 0x01f00000) >> 20) as usize;
+
+        // Emulate that register x0 is hardwired with all bits equal to 0.
+        self.regs[0] = 0;
 
         match opcode {
             0x13 => {

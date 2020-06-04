@@ -437,6 +437,21 @@ impl Cpu {
 
                 self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
             }
+            0x73 => {
+                match funct3 {
+                    0x0 => {
+                        match (rs2, funct7) {
+                            (0x2, 0x8) => {
+                                // sret
+                            }
+                            (0x2, 0x18) => {
+                                // mret
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
             _ => {
                 dbg!(format!("not implemented yet: opcode {:#x}", opcode));
                 return true;

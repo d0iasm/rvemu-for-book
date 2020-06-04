@@ -3,6 +3,14 @@
 /// Default memory size (128MiB).
 pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
 
+/// The privileged mode.
+#[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
+pub enum Mode {
+    User = 0b00,
+    Supervisor = 0b01,
+    Machine = 0b11,
+}
+
 /// The CPU to contain registers, a program coutner, and memory.
 pub struct Cpu {
     /// 32 64-bit integer registers.
@@ -11,6 +19,9 @@ pub struct Cpu {
     pub pc: u64,
     /// Computer memory to store executable instructions and the stack region.
     pub memory: Vec<u8>,
+
+    /// Privilege level.
+    pub mode: Mode,
 }
 
 impl Cpu {
@@ -27,6 +38,7 @@ impl Cpu {
             regs,
             pc: 0,
             memory,
+            mode: Mode::Machine,
         }
     }
 
@@ -450,6 +462,7 @@ impl Cpu {
                             _ => {}
                         }
                     }
+                    _ => {}
                 }
             }
             _ => {

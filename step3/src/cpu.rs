@@ -9,6 +9,9 @@ pub struct Cpu {
     pub regs: [u64; 32],
     /// Program counter to hold the the memory address of the next instruction that would be executed.
     pub pc: u64,
+    /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
+    /// up to 4096 CSRs.
+    pub csrs: [u64; 4096],
     /// Computer memory to store executable instructions and the stack region.
     pub memory: Vec<u8>,
 }
@@ -26,6 +29,7 @@ impl Cpu {
         Self {
             regs,
             pc: 0,
+            csrs: [0; 4096],
             memory,
         }
     }
@@ -438,10 +442,13 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
             }
             0x73 => {
-                let csr_addr = ((inst & 0xfff00000) >> 20) as u16;
+                let csr_addr = ((inst & 0xfff00000) >> 20) as usize;
                 match funct3 {
                     0x1 => {
                         // csrrw
+                        let t = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = self.regs[rs1];
+                        self.regs[rd] = t;
                     }
                     0x2 => {
                         // csrrs
@@ -458,6 +465,7 @@ impl Cpu {
                     0x7 => {
                         // csrrci
                     }
+                    _ => {}
                 }
             }
             _ => {

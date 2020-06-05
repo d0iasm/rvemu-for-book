@@ -3,14 +3,6 @@
 /// Default memory size (128MiB).
 pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
 
-/// The privileged mode.
-#[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
-pub enum Mode {
-    User = 0b00,
-    Supervisor = 0b01,
-    Machine = 0b11,
-}
-
 /// The CPU to contain registers, a program coutner, and memory.
 pub struct Cpu {
     /// 32 64-bit integer registers.
@@ -19,9 +11,6 @@ pub struct Cpu {
     pub pc: u64,
     /// Computer memory to store executable instructions and the stack region.
     pub memory: Vec<u8>,
-
-    /// Privilege level.
-    pub mode: Mode,
 }
 
 impl Cpu {
@@ -38,7 +27,6 @@ impl Cpu {
             regs,
             pc: 0,
             memory,
-            mode: Mode::Machine,
         }
     }
 
@@ -150,7 +138,7 @@ impl Cpu {
         let funct3 = (inst & 0x00007000) >> 12;
         let funct7 = (inst & 0xfe000000) >> 25;
 
-        // The value in x0 register is always 0. This is a workaround.
+        // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;
 
         match opcode {
@@ -450,19 +438,26 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
             }
             0x73 => {
+                let csr_addr = ((inst & 0xfff00000) >> 20) as u16;
                 match funct3 {
-                    0x0 => {
-                        match (rs2, funct7) {
-                            (0x2, 0x8) => {
-                                // sret
-                            }
-                            (0x2, 0x18) => {
-                                // mret
-                            }
-                            _ => {}
-                        }
+                    0x1 => {
+                        // csrrw
                     }
-                    _ => {}
+                    0x2 => {
+                        // csrrs
+                    }
+                    0x3 => {
+                        // csrrc
+                    }
+                    0x5 => {
+                        // csrrwi
+                    }
+                    0x6 => {
+                        // csrrsi
+                    }
+                    0x7 => {
+                        // csrrci
+                    }
                 }
             }
             _ => {

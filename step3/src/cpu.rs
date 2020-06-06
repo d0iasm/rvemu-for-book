@@ -452,18 +452,35 @@ impl Cpu {
                     }
                     0x2 => {
                         // csrrs
+                        let t = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = t | self.regs[rs1];
+                        self.regs[rd] = t;
                     }
                     0x3 => {
                         // csrrc
+                        let t = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = t & (!self.regs[rs1]);
+                        self.regs[rd] = t;
                     }
                     0x5 => {
                         // csrrwi
+                        let zimm = rs1 as u64;
+                        self.regs[rd] = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = zimm;
                     }
                     0x6 => {
                         // csrrsi
+                        let zimm = rs1 as u64;
+                        let t = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = t | zimm;
+                        self.regs[rd] = t;
                     }
                     0x7 => {
                         // csrrci
+                        let zimm = rs1 as u64;
+                        let t = self.csrs[csr_addr];
+                        self.csrs[csr_addr] = t & (!zimm);
+                        self.regs[rd] = t;
                     }
                     _ => {}
                 }

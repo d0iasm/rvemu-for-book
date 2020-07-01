@@ -1,5 +1,7 @@
 //! The cpu module contains `Cpu` and implementarion for it.
 
+#![allow(dead_code)]
+
 use crate::trap::*;
 
 /// Default memory size (128MiB).

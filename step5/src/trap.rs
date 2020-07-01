@@ -1,6 +1,27 @@
 //! The trap module contains exceptions and interrupts.
 
+#![allow(dead_code)]
+
 use crate::cpu::*;
+
+/// All kinds of exceptions, an unusual condition occurring at run
+/// time associated with an instruction in the current hardware thread.
+pub enum Exception {
+    InstructionAddressMisaligned,
+    InstructionAccessFault,
+    IllegalInstruction,
+    Breakpoint,
+    LoadAddressMisaligned,
+    LoadAccessFault,
+    StoreAMOAddressMisaligned,
+    StoreAMOAccessFault,
+    EnvironmentCallFromUMode,
+    EnvironmentCallFromSMode,
+    EnvironmentCallFromMMode,
+    InstructionPageFault,
+    LoadPageFault,
+    StoreAMOPageFault,
+}
 
 /// The transfer of control to a trap handler caused by either an
 /// exception or an interrupt.
@@ -107,23 +128,6 @@ pub trait Trap {
             cpu.csrs[MSTATUS] = cpu.csrs[MSTATUS] & !(0b11 << 11);
         }
     }
-}
-
-pub enum Exception {
-    InstructionAddressMisaligned,
-    InstructionAccessFault,
-    IllegalInstruction,
-    Breakpoint,
-    LoadAddressMisaligned,
-    LoadAccessFault,
-    StoreAMOAddressMisaligned,
-    StoreAMOAccessFault,
-    EnvironmentCallFromUMode,
-    EnvironmentCallFromSMode,
-    EnvironmentCallFromMMode,
-    InstructionPageFault,
-    LoadPageFault,
-    StoreAMOPageFault,
 }
 
 impl Trap for Exception {

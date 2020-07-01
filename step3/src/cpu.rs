@@ -1,5 +1,7 @@
 //! The cpu module contains `Cpu` and implementarion for it.
 
+#![allow(dead_code)]
+
 /// Default memory size (128MiB).
 pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
 

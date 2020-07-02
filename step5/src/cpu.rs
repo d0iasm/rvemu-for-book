@@ -2,10 +2,9 @@
 
 #![allow(dead_code)]
 
+use crate::bus::*;
+use crate::memory::*;
 use crate::trap::*;
-
-/// Default memory size (128MiB).
-pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
 
 // Machine-level CSRs.
 /// Hardware thread ID.
@@ -59,7 +58,8 @@ pub enum Mode {
     Machine = 0b11,
 }
 
-/// The CPU to contain registers, a program coutner, and memory.
+/// The `Cpu` struct that contains registers, a program coutner, system bus that connects
+/// peripheral devices, and control and status registers.
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],
@@ -67,29 +67,27 @@ pub struct Cpu {
     pub pc: u64,
     /// The current privilege mode.
     pub mode: Mode,
+    /// System bus that transfers data between CPU and peripheral devices.
+    pub bus: Bus,
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
     pub csrs: [u64; 4096],
-    /// Computer memory to store executable instructions and the stack region.
-    pub memory: Vec<u8>,
 }
 
 impl Cpu {
     /// Create a new `Cpu` object.
     pub fn new(binary: Vec<u8>) -> Self {
-        let mut memory = vec![0; MEMORY_SIZE as usize];
-        memory.splice(..binary.len(), binary.iter().cloned());
-
         // The stack pointer (SP) must be set up at first.
         let mut regs = [0; 32];
-        regs[2] = MEMORY_SIZE;
+        regs[2] = MEMORY_BASE + MEMORY_SIZE;
 
         Self {
             regs,
-            pc: 0,
+            // The program counter starts from the start address of a memory.
+            pc: MEMORY_BASE,
             mode: Mode::Machine,
+            bus: Bus::new(binary),
             csrs: [0; 4096],
-            memory,
         }
     }
 
@@ -141,92 +139,22 @@ impl Cpu {
         println!("{}", output);
     }
 
-    /// Read a byte from the little-endian memory.
-    fn read8(&self, addr: u64) -> u64 {
-        self.memory[addr as usize] as u64
-    }
-
-    /// Read 2 bytes from the little-endian memory.
-    fn read16(&self, addr: u64) -> u64 {
-        let index = addr as usize;
-        return (self.memory[index] as u64) | ((self.memory[index + 1] as u64) << 8);
-    }
-
-    /// Read 4 bytes from the little-endian memory.
-    fn read32(&self, addr: u64) -> u64 {
-        let index = addr as usize;
-        return (self.memory[index] as u64)
-            | ((self.memory[index + 1] as u64) << 8)
-            | ((self.memory[index + 2] as u64) << 16)
-            | ((self.memory[index + 3] as u64) << 24);
-    }
-
-    /// Read 8 bytes from the little-endian memory.
-    fn read64(&self, addr: u64) -> u64 {
-        let index = addr as usize;
-        return (self.memory[index] as u64)
-            | ((self.memory[index + 1] as u64) << 8)
-            | ((self.memory[index + 2] as u64) << 16)
-            | ((self.memory[index + 3] as u64) << 24)
-            | ((self.memory[index + 4] as u64) << 32)
-            | ((self.memory[index + 5] as u64) << 40)
-            | ((self.memory[index + 6] as u64) << 48)
-            | ((self.memory[index + 7] as u64) << 56);
-    }
-
-    /// Write a byte to the little-endian memory.
-    fn write8(&mut self, addr: u64, val: u64) {
-        let index = addr as usize;
-        self.memory[index] = val as u8
-    }
-
-    /// Write 2 bytes to the little-endian memory.
-    fn write16(&mut self, addr: u64, val: u64) {
-        let index = addr as usize;
-        self.memory[index] = (val & 0xff) as u8;
-        self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
-    }
-
-    /// Write 4 bytes to the little-endian memory.
-    fn write32(&mut self, addr: u64, val: u64) {
-        let index = addr as usize;
-        self.memory[index] = (val & 0xff) as u8;
-        self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
-        self.memory[index + 2] = ((val >> 16) & 0xff) as u8;
-        self.memory[index + 3] = ((val >> 24) & 0xff) as u8;
-    }
-
-    /// Write 8 bytes to the little-endian memory.
-    fn write64(&mut self, addr: u64, val: u64) {
-        let index = addr as usize;
-        self.memory[index] = (val & 0xff) as u8;
-        self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
-        self.memory[index + 2] = ((val >> 16) & 0xff) as u8;
-        self.memory[index + 3] = ((val >> 24) & 0xff) as u8;
-        self.memory[index + 4] = ((val >> 32) & 0xff) as u8;
-        self.memory[index + 5] = ((val >> 40) & 0xff) as u8;
-        self.memory[index + 6] = ((val >> 48) & 0xff) as u8;
-        self.memory[index + 7] = ((val >> 56) & 0xff) as u8;
-    }
-
     /// Get an instruction from the memory.
-    pub fn fetch(&self) -> u32 {
-        return self.read32(self.pc) as u32;
+    pub fn fetch(&self) -> Result<u64, Exception> {
+        match self.bus.load(self.pc, 32) {
+            Ok(inst) => Ok(inst),
+            Err(_e) => Err(Exception::InstructionAccessFault),
+        }
     }
 
     /// Execute an instruction after decoding. Return true if an error happens, otherwise false.
-    pub fn execute(&mut self, inst: u32) -> Result<(), Exception> {
-        // Let `inst` u64 for the sake of simplicity.
-        let inst = inst as u64;
-
+    pub fn execute(&mut self, inst: u64) -> Result<(), Exception> {
         let opcode = inst & 0x0000007f;
         let rd = ((inst & 0x00000f80) >> 7) as usize;
         let rs1 = ((inst & 0x000f8000) >> 15) as usize;
         let rs2 = ((inst & 0x01f00000) >> 20) as usize;
         let funct3 = (inst & 0x00007000) >> 12;
         let funct7 = (inst & 0xfe000000) >> 25;
-
-        println!("pc inst {:#x} {:#x}", self.pc, inst);
 
         // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;
@@ -239,37 +167,37 @@ impl Cpu {
                 match funct3 {
                     0x0 => {
                         // lb
-                        let val = self.read8(addr);
+                        let val = self.bus.load(addr, 8)?;
                         self.regs[rd] = val as i8 as i64 as u64;
                     }
                     0x1 => {
                         // lh
-                        let val = self.read16(addr);
+                        let val = self.bus.load(addr, 16)?;
                         self.regs[rd] = val as i16 as i64 as u64;
                     }
                     0x2 => {
                         // lw
-                        let val = self.read32(addr);
+                        let val = self.bus.load(addr, 32)?;
                         self.regs[rd] = val as i32 as i64 as u64;
                     }
                     0x3 => {
                         // ld
-                        let val = self.read64(addr);
+                        let val = self.bus.load(addr, 64)?;
                         self.regs[rd] = val;
                     }
                     0x4 => {
                         // lbu
-                        let val = self.read8(addr);
+                        let val = self.bus.load(addr, 8)?;
                         self.regs[rd] = val;
                     }
                     0x5 => {
                         // lhu
-                        let val = self.read16(addr);
+                        let val = self.bus.load(addr, 16)?;
                         self.regs[rd] = val;
                     }
                     0x6 => {
                         // lwu
-                        let val = self.read32(addr);
+                        let val = self.bus.load(addr, 32)?;
                         self.regs[rd] = val;
                     }
                     _ => {}
@@ -362,10 +290,10 @@ impl Cpu {
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
                 match funct3 {
-                    0x0 => self.write8(addr, self.regs[rs2]),  // sb
-                    0x1 => self.write16(addr, self.regs[rs2]), // sh
-                    0x2 => self.write32(addr, self.regs[rs2]), // sw
-                    0x3 => self.write64(addr, self.regs[rs2]), // sd
+                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
+                    0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
+                    0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
+                    0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
                     _ => {}
                 }
             }

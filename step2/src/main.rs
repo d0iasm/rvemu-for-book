@@ -1,4 +1,6 @@
+mod bus;
 mod cpu;
+mod memory;
 
 use std::env;
 use std::fs::File;
@@ -6,12 +8,13 @@ use std::io;
 use std::io::prelude::*;
 
 use crate::cpu::*;
+use crate::bus::*;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
-        panic!("Usage: rvemu-simple <filename>");
+        panic!("Usage: rvemu-for-book <filename>");
     }
     let mut file = File::open(&args[1])?;
     let mut binary = Vec::new();
@@ -19,9 +22,13 @@ fn main() -> io::Result<()> {
 
     let mut cpu = Cpu::new(binary);
 
-    while cpu.pc < cpu.memory.len() as u64 {
+    while cpu.pc - MEMORY_BASE < cpu.codesize {
         // 1. Fetch.
-        let inst = cpu.fetch();
+        let inst = match cpu.fetch() {
+            // Break the loop if an error occurs.
+            Ok(inst)=> inst,
+            Err(_)=> break,
+        };
 
         // 2. Add 4 to the program counter.
         cpu.pc += 4;
@@ -29,10 +36,10 @@ fn main() -> io::Result<()> {
         // 3. Decode.
         // 4. Execute.
         match cpu.execute(inst) {
-            // True if an error happens.
-            true => break,
-            false => {}
-        };
+            // Break the loop if an error occurs.
+            Ok(_)=> {}
+            Err(_)=> break,
+        }
 
         // This is a workaround for avoiding an infinite loop.
         if cpu.pc == 0 {

@@ -1,0 +1,244 @@
+5,6c5,6
+< use crate::bus::*;
+< use crate::memory::*;
+---
+> /// Default memory size (128MiB).
+> pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
+52,53c52,60
+< /// The `Cpu` struct that contains registers, a program coutner, system bus that connects
+< /// peripheral devices, and control and status registers.
+---
+> /// The privileged mode.
+> #[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
+> pub enum Mode {
+>     User = 0b00,
+>     Supervisor = 0b01,
+>     Machine = 0b11,
+> }
+> 
+> /// The CPU to contain registers, a program coutner, and memory.
+59,60c66,67
+<     /// System bus that transfers data between CPU and peripheral devices.
+<     pub bus: Bus,
+---
+>     /// The current privilege mode.
+>     pub mode: Mode,
+64,65c71,72
+<     /// The size of executable binary.
+<     pub codesize: u64,
+---
+>     /// Computer memory to store executable instructions and the stack region.
+>     pub memory: Vec<u8>,
+70a78,80
+>         let mut memory = vec![0; MEMORY_SIZE as usize];
+>         memory.splice(..binary.len(), binary.iter().cloned());
+> 
+73,75c83
+<         regs[2] = MEMORY_BASE + MEMORY_SIZE;
+< 
+<         let codesize = binary.len() as u64;
+---
+>         regs[2] = MEMORY_SIZE;
+79,81c87,88
+<             // The program counter starts from the start address of a memory.
+<             pc: MEMORY_BASE,
+<             bus: Bus::new(binary),
+---
+>             pc: 0,
+>             mode: Mode::Machine,
+83c90
+<             codesize,
+---
+>             memory,
+134a142,209
+>     /// Read a byte from the little-endian memory.
+>     fn read8(&self, addr: u64) -> u64 {
+>         self.memory[addr as usize] as u64
+>     }
+> 
+>     /// Read 2 bytes from the little-endian memory.
+>     fn read16(&self, addr: u64) -> u64 {
+>         let index = addr as usize;
+>         return (self.memory[index] as u64) | ((self.memory[index + 1] as u64) << 8);
+>     }
+> 
+>     /// Read 4 bytes from the little-endian memory.
+>     fn read32(&self, addr: u64) -> u64 {
+>         let index = addr as usize;
+>         return (self.memory[index] as u64)
+>             | ((self.memory[index + 1] as u64) << 8)
+>             | ((self.memory[index + 2] as u64) << 16)
+>             | ((self.memory[index + 3] as u64) << 24);
+>     }
+> 
+>     /// Read 8 bytes from the little-endian memory.
+>     fn read64(&self, addr: u64) -> u64 {
+>         let index = addr as usize;
+>         return (self.memory[index] as u64)
+>             | ((self.memory[index + 1] as u64) << 8)
+>             | ((self.memory[index + 2] as u64) << 16)
+>             | ((self.memory[index + 3] as u64) << 24)
+>             | ((self.memory[index + 4] as u64) << 32)
+>             | ((self.memory[index + 5] as u64) << 40)
+>             | ((self.memory[index + 6] as u64) << 48)
+>             | ((self.memory[index + 7] as u64) << 56);
+>     }
+> 
+>     /// Write a byte to the little-endian memory.
+>     fn write8(&mut self, addr: u64, val: u64) {
+>         let index = addr as usize;
+>         self.memory[index] = val as u8
+>     }
+> 
+>     /// Write 2 bytes to the little-endian memory.
+>     fn write16(&mut self, addr: u64, val: u64) {
+>         let index = addr as usize;
+>         self.memory[index] = (val & 0xff) as u8;
+>         self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
+>     }
+> 
+>     /// Write 4 bytes to the little-endian memory.
+>     fn write32(&mut self, addr: u64, val: u64) {
+>         let index = addr as usize;
+>         self.memory[index] = (val & 0xff) as u8;
+>         self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
+>         self.memory[index + 2] = ((val >> 16) & 0xff) as u8;
+>         self.memory[index + 3] = ((val >> 24) & 0xff) as u8;
+>     }
+> 
+>     /// Write 8 bytes to the little-endian memory.
+>     fn write64(&mut self, addr: u64, val: u64) {
+>         let index = addr as usize;
+>         self.memory[index] = (val & 0xff) as u8;
+>         self.memory[index + 1] = ((val >> 8) & 0xff) as u8;
+>         self.memory[index + 2] = ((val >> 16) & 0xff) as u8;
+>         self.memory[index + 3] = ((val >> 24) & 0xff) as u8;
+>         self.memory[index + 4] = ((val >> 32) & 0xff) as u8;
+>         self.memory[index + 5] = ((val >> 40) & 0xff) as u8;
+>         self.memory[index + 6] = ((val >> 48) & 0xff) as u8;
+>         self.memory[index + 7] = ((val >> 56) & 0xff) as u8;
+>     }
+> 
+136,137c211,212
+<     pub fn fetch(&self) -> Result<u64, ()> {
+<         return self.bus.load(self.pc, 32)
+---
+>     pub fn fetch(&self) -> u32 {
+>         return self.read32(self.pc) as u32;
+141c216,219
+<     pub fn execute(&mut self, inst: u64) -> Result<(), ()> {
+---
+>     pub fn execute(&mut self, inst: u32) -> bool {
+>         // Let `inst` u64 for the sake of simplicity.
+>         let inst = inst as u64;
+> 
+160c238
+<                         let val = self.bus.load(addr, 8)?;
+---
+>                         let val = self.read8(addr);
+165c243
+<                         let val = self.bus.load(addr, 16)?;
+---
+>                         let val = self.read16(addr);
+170c248
+<                         let val = self.bus.load(addr, 32)?;
+---
+>                         let val = self.read32(addr);
+175c253
+<                         let val = self.bus.load(addr, 64)?;
+---
+>                         let val = self.read64(addr);
+180c258
+<                         let val = self.bus.load(addr, 8)?;
+---
+>                         let val = self.read8(addr);
+185c263
+<                         let val = self.bus.load(addr, 16)?;
+---
+>                         let val = self.read16(addr);
+190c268
+<                         let val = self.bus.load(addr, 32)?;
+---
+>                         let val = self.read32(addr);
+283,286c361,364
+<                     0x0 => self.bus.store(addr, 8, self.regs[rs2])?,  // sb
+<                     0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
+<                     0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
+<                     0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
+---
+>                     0x0 => self.write8(addr, self.regs[rs2]),  // sb
+>                     0x1 => self.write16(addr, self.regs[rs2]), // sh
+>                     0x2 => self.write32(addr, self.regs[rs2]), // sw
+>                     0x3 => self.write64(addr, self.regs[rs2]), // sd
+450a529,591
+>                     0x0 => {
+>                         match (rs2, funct7) {
+>                             (0x2, 0x8) => {
+>                                 // sret
+>                                 // The SRET instruction returns from a supervisor-mode exception
+>                                 // handler. It does the following operations:
+>                                 // - Sets the pc to CSRs[sepc].
+>                                 // - Sets the privilege mode to CSRs[sstatus].SPP.
+>                                 // - Sets CSRs[sstatus].SIE to CSRs[sstatus].SPIE.
+>                                 // - Sets CSRs[sstatus].SPIE to 1.
+>                                 // - Sets CSRs[sstatus].SPP to 0.
+>                                 self.pc = self.csrs[SEPC];
+>                                 // When the SRET instruction is executed to return from the trap
+>                                 // handler, the privilege level is set to user mode if the SPP
+>                                 // bit is 0, or supervisor mode if the SPP bit is 1. The SPP bit
+>                                 // is the 8th of the SSTATUS csr.
+>                                 self.mode = match (self.csrs[SSTATUS] >> 8) & 1 {
+>                                     1 => Mode::Supervisor,
+>                                     _ => Mode::User,
+>                                 };
+>                                 // The SPIE bit is the 5th and the SIE bit is the 1st of the
+>                                 // SSTATUS csr.
+>                                 self.csrs[SSTATUS] = if ((self.csrs[SSTATUS] >> 5) & 1) == 1 {
+>                                     self.csrs[SSTATUS] | (1 << 1)
+>                                 } else {
+>                                     self.csrs[SSTATUS] & !(1 << 1)
+>                                 };
+>                                 self.csrs[SSTATUS] = self.csrs[SSTATUS] | (1 << 5);
+>                                 self.csrs[SSTATUS] = self.csrs[SSTATUS] & !(1 << 8);
+>                             }
+>                             (0x2, 0x18) => {
+>                                 // mret
+>                                 // The MRET instruction returns from a machine-mode exception
+>                                 // handler. It does the following operations:
+>                                 // - Sets the pc to CSRs[mepc].
+>                                 // - Sets the privilege mode to CSRs[mstatus].MPP.
+>                                 // - Sets CSRs[mstatus].MIE to CSRs[mstatus].MPIE.
+>                                 // - Sets CSRs[mstatus].MPIE to 1.
+>                                 // - Sets CSRs[mstatus].MPP to 0.
+>                                 self.pc = self.csrs[MEPC];
+>                                 // MPP is two bits wide at [11..12] of the MSTATUS csr.
+>                                 self.mode = match (self.csrs[MSTATUS] >> 11) & 0b11 {
+>                                     2 => Mode::Machine,
+>                                     1 => Mode::Supervisor,
+>                                     _ => Mode::User,
+>                                 };
+>                                 // The MPIE bit is the 7th and the MIE bit is the 3rd of the
+>                                 // MSTATUS csr.
+>                                 self.csrs[MSTATUS] = if ((self.csrs[MSTATUS] >> 7) & 1) == 1 {
+>                                     self.csrs[MSTATUS] | (1 << 3)
+>                                 } else {
+>                                     self.csrs[MSTATUS] & !(1 << 3)
+>                                 };
+>                                 self.csrs[MSTATUS] = self.csrs[MSTATUS] | (1 << 7);
+>                                 self.csrs[MSTATUS] = self.csrs[MSTATUS] & !(0b11 << 11);
+>                             }
+>                             (_, 0x9) => {
+>                                 // sfence.vma
+>                                 // Do nothing.
+>                             }
+>                             _ => {}
+>                         }
+>                     }
+494c635
+<                 return Err(());
+---
+>                 return true;
+497c638
+<         return Ok(());
+---
+>         return false;

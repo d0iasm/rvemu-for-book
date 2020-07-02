@@ -1,9 +1,10 @@
-//! The cpu module contains CPU and implementarion for it.
+//! The cpu module contains `Cpu` and implementarion for it.
 
 use crate::bus::*;
 use crate::memory::*;
 
-/// The CPU to contain registers, a program coutner, and memory.
+/// The `Cpu` struct that contains registers, a program coutner, and system bus that connects
+/// peripheral devices.
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],

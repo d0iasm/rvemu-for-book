@@ -30,6 +30,7 @@ fn main() -> io::Result<()> {
             Ok(inst) => inst,
             Err(exception) => {
                 exception.take_trap(&mut cpu);
+                println!("exception: {:?}", exception);
                 break;
             }
         };
@@ -44,6 +45,7 @@ fn main() -> io::Result<()> {
             Ok(_) => {}
             Err(exception) => {
                 exception.take_trap(&mut cpu);
+                println!("exception: {:?}", exception);
                 break;
             }
         }

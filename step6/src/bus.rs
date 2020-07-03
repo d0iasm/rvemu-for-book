@@ -40,6 +40,7 @@ impl Bus {
         if MEMORY_BASE <= addr {
             return self.memory.load(addr, size);
         }
+        println!("load {:#x} {}", addr, size);
         Err(Exception::LoadAccessFault)
     }
 

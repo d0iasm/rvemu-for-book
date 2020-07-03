@@ -7,8 +7,8 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-use crate::cpu::*;
 use crate::bus::*;
+use crate::cpu::*;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -26,8 +26,8 @@ fn main() -> io::Result<()> {
         // 1. Fetch.
         let inst = match cpu.fetch() {
             // Break the loop if an error occurs.
-            Ok(inst)=> inst,
-            Err(_)=> break,
+            Ok(inst) => inst,
+            Err(_) => break,
         };
 
         // 2. Add 4 to the program counter.
@@ -37,8 +37,8 @@ fn main() -> io::Result<()> {
         // 4. Execute.
         match cpu.execute(inst) {
             // Break the loop if an error occurs.
-            Ok(_)=> {}
-            Err(_)=> break,
+            Ok(_) => {}
+            Err(_) => break,
         }
 
         // This is a workaround for avoiding an infinite loop.

@@ -59,7 +59,7 @@ impl Cpu {
 
     /// Get an instruction from the memory.
     pub fn fetch(&self) -> Result<u64, ()> {
-        return self.bus.load(self.pc, 32)
+        return self.bus.load(self.pc, 32);
     }
 
     /// Execute an instruction after decoding. Return true if an error happens, otherwise false.
@@ -205,7 +205,7 @@ impl Cpu {
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
                 match funct3 {
-                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?,  // sb
+                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
                     0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
                     0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
                     0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd

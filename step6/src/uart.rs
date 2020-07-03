@@ -14,16 +14,6 @@ use crate::trap::*;
 pub const UART_RHR: u64 = UART_BASE + 0;
 /// Transmit holding register (for output bytes).
 pub const UART_THR: u64 = UART_BASE + 0;
-/// Interrupt enable register.
-pub const UART_IER: u64 = UART_BASE + 1;
-/// FIFO control register.
-pub const UART_FCR: u64 = UART_BASE + 2;
-/// Interrupt status register.
-/// ISR BIT-0:
-///     0 = an interrupt is pending and the ISR contents may be used as a pointer to the appropriate
-/// interrupt service routine.
-///     1 = no interrupt is pending.
-pub const UART_ISR: u64 = UART_BASE + 2;
 /// Line control register.
 pub const UART_LCR: u64 = UART_BASE + 3;
 /// Line status register.
@@ -35,9 +25,9 @@ pub const UART_LCR: u64 = UART_BASE + 3;
 ///     1 = transmitter hold register (or FIFO) is empty. CPU can load the next character.
 pub const UART_LSR: u64 = UART_BASE + 5;
 
-/// The receiver (RX).
+/// The receiver (RX) bit.
 pub const UART_LSR_RX: u8 = 1;
-/// The transmitter (TX).
+/// The transmitter (TX) bit.
 pub const UART_LSR_TX: u8 = 1 << 5;
 
 pub struct Uart {

@@ -14,7 +14,7 @@ pub const UART_SIZE: u64 = 0x100;
 pub const MEMORY_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
-    fn load(&self, addr: u64, size: u64) -> Result<u64, Exception>;
+    fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception>;
     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception>;
 }
 
@@ -33,7 +33,7 @@ impl Bus {
         }
     }
 
-    pub fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+    pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
         if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
             return self.uart.load(addr, size);
         }

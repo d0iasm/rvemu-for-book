@@ -55,7 +55,7 @@ impl Clint {
         match addr {
             CLINT_MTIMECMP => self.mtimecmp = value,
             CLINT_MTIME => self.mtime = value,
-            _ => {},
+            _ => {}
         }
     }
 }

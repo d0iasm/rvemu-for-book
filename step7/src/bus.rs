@@ -1,11 +1,11 @@
 //! The bus module contains the system bus which can access the memroy or memory-mapped peripheral
 //! devices.
 
+use crate::clint::*;
 use crate::memory::*;
+use crate::plic::*;
 use crate::trap::*;
 use crate::uart::*;
-use crate::plic::*;
-use crate::clint::*;
 
 /// The address which the core-local interruptor (CLINT) starts. It contains the timer and
 /// generates per-hart software interrupts and timer

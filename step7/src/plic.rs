@@ -23,7 +23,7 @@ pub struct Plic {
     sclaim: u64,
 }
 
-impl Device for Plic{
+impl Device for Plic {
     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
         match size {
             32 => Ok(self.load32(addr)),
@@ -66,7 +66,7 @@ impl Plic {
             PLIC_SENABLE => self.senable = value,
             PLIC_SPRIORITY => self.spriority = value,
             PLIC_SCLAIM => self.sclaim = value,
-            _ => {},
+            _ => {}
         }
     }
 }

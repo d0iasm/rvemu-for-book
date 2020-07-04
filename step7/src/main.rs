@@ -1,10 +1,10 @@
 mod bus;
+mod clint;
 mod cpu;
 mod memory;
+mod plic;
 mod trap;
 mod uart;
-mod plic;
-mod clint;
 
 use std::env;
 use std::fs::File;

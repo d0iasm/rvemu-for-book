@@ -203,6 +203,14 @@ impl Cpu {
                     _ => {}
                 }
             }
+            0x0f => {
+                // A fence instruction does nothing because this emulator executes an
+                // instruction sequentially on a single thread.
+                match funct3 {
+                    0x0 => {} // fence
+                    _ => {}
+                }
+            }
             0x13 => {
                 // imm[11:0] = inst[31:20]
                 let imm = ((inst & 0xfff00000) as i32 as i64 >> 20) as u64;
@@ -496,6 +504,28 @@ impl Cpu {
                 match funct3 {
                     0x0 => {
                         match (rs2, funct7) {
+                            (0x0, 0x0) => {
+                                // ecall
+                                // Makes a request of the execution environment by raising an
+                                // environment call exception.
+                                match self.mode {
+                                    Mode::User => {
+                                        return Err(Exception::EnvironmentCallFromUMode);
+                                    }
+                                    Mode::Supervisor => {
+                                        return Err(Exception::EnvironmentCallFromSMode);
+                                    }
+                                    Mode::Machine => {
+                                        return Err(Exception::EnvironmentCallFromMMode);
+                                    }
+                                }
+                            }
+                            (0x1, 0x0) => {
+                                // ebreak
+                                // Makes a request of the debugger bu raising a Breakpoint
+                                // exception.
+                                return Err(Exception::Breakpoint);
+                            }
                             (0x2, 0x8) => {
                                 // sret
                                 // The SRET instruction returns from a supervisor-mode exception

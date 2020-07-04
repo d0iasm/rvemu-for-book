@@ -1,6 +1,8 @@
 mod bus;
+mod clint;
 mod cpu;
 mod memory;
+mod plic;
 mod trap;
 mod uart;
 

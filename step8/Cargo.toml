@@ -1,0 +1,8 @@
+[package]
+name = "step8-rvemu-for-book"
+version = "0.1.0"
+authors = ["Asami Doi <d0iasm.pub@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+async-std = "1.6.2"

@@ -15,6 +15,9 @@ use std::thread;
 use crate::bus::*;
 use crate::trap::*;
 
+/// The interrupt request of UART.
+pub const UART_IRQ: u64 = 10;
+
 /// Receive holding register (for input bytes).
 pub const UART_RHR: u64 = UART_BASE + 0;
 /// Transmit holding register (for output bytes).
@@ -95,6 +98,11 @@ impl Uart {
         Self { uart, interrupting }
     }
 
+    /// Return true if an interrupt is pending. Clear the interrupting flag by swapping a value.
+    pub fn is_interrupting(&self) -> bool {
+        self.interrupting.swap(false, Ordering::Acquire)
+    }
+
     fn load8(&mut self, addr: u64) -> u64 {
         let (uart, cvar) = &*self.uart;
         let mut uart = uart.lock().expect("failed to get an UART object");
@@ -104,7 +112,7 @@ impl Uart {
                 uart[(UART_LSR - UART_BASE) as usize] &= !UART_LSR_RX;
                 uart[(UART_RHR - UART_BASE) as usize] as u64
             }
-            _ => uart[(addr- UART_BASE) as usize] as u64,
+            _ => uart[(addr - UART_BASE) as usize] as u64,
         }
     }
 
@@ -117,7 +125,7 @@ impl Uart {
                 io::stdout().flush().expect("failed to flush stdout");
             }
             _ => {
-                uart[(addr- UART_BASE) as usize] = value as u8;
+                uart[(addr - UART_BASE) as usize] = value as u8;
             }
         }
     }

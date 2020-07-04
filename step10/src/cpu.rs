@@ -9,6 +9,9 @@ use crate::trap::*;
 use crate::uart::*;
 use crate::virtio::*;
 
+/// The page size (4 KiB) for the virtual memory system.
+const PAGE_SIZE: u64 = 4096;
+
 // Machine-level CSRs.
 /// Hardware thread ID.
 pub const MHARTID: usize = 0xf14;
@@ -71,6 +74,18 @@ pub enum Mode {
     Machine = 0b11,
 }
 
+/// Access type that is used in the virtual address translation process. It decides which exception
+/// should raises (InstructionPageFault, LoadPageFault or StoreAMOPageFault).
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum AccessType {
+    /// Raises the exception InstructionPageFault. It is used for an instruction fetch.
+    Instruction,
+    /// Raises the exception LoadPageFault.
+    Load,
+    /// Raises the exception StoreAMOPageFault.
+    Store,
+}
+
 /// The `Cpu` struct that contains registers, a program coutner, system bus that connects
 /// peripheral devices, and control and status registers.
 pub struct Cpu {
@@ -85,6 +100,10 @@ pub struct Cpu {
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
     pub csrs: [u64; 4096],
+    /// SV39 paging flag.
+    pub enable_paging: bool,
+    /// physical page number (PPN) × PAGE_SIZE (4096).
+    pub page_table: u64,
 }
 
 impl Cpu {
@@ -101,6 +120,8 @@ impl Cpu {
             mode: Mode::Machine,
             bus: Bus::new(binary, disk_image),
             csrs: [0; 4096],
+            enable_paging: false,
+            page_table: 0,
         }
     }
 
@@ -229,9 +250,135 @@ impl Cpu {
         None
     }
 
+    /// Update the physical page number (PPN) and the addressing mode.
+    fn update_paging(&mut self) {
+        // Read the physical page number (PPN) of the root page table, i.e., its
+        // supervisor physical address divided by 4 KiB.
+        self.page_table = (self.csrs[SATP] & ((1 << 44) - 1)) * PAGE_SIZE;
+
+        // Read the MODE field, which selects the current address-translation scheme.
+        let mode = self.csrs[SATP] & (0b1111 << 60);
+
+        // Enable the SV39 paging if the value of the mode field is 8.
+        if mode == 8 {
+            self.enable_paging = true;
+        } else {
+            self.enable_paging = false;
+        }
+    }
+
+    /// Translate a virtual address to a physical address for the paged virtual-memory system.
+    pub fn translate(&mut self, addr: u64, access_type: AccessType) -> Result<u64, Exception> {
+        if !self.enable_paging {
+            return Ok(addr);
+        }
+
+        // 4.3.2 Virtual Address Translation Process
+        // (The RISC-V Instruction Set Manual Volume II-Privileged Architecture_20190608)
+        // A virtual address va is translated into a physical address pa as follows:
+        let levels = 3;
+        let vpn = [
+            (addr >> 12) & 0x1ff,
+            (addr >> 21) & 0x1ff,
+            (addr >> 30) & 0x1ff,
+        ];
+
+        // 1. Let a be satp.ppn × PAGESIZE, and let i = LEVELS − 1. (For Sv32, PAGESIZE=212
+        //    and LEVELS=2.)
+        let mut a = self.page_table;
+        let mut i: i64 = levels - 1;
+        let mut pte;
+        loop {
+            // 2. Let pte be the value of the PTE at address a+va.vpn[i]×PTESIZE. (For Sv32,
+            //    PTESIZE=4.) If accessing pte violates a PMA or PMP check, raise an access
+            //    exception corresponding to the original access type.
+            pte = self.bus.load(a + vpn[i as usize] * 8, 64)?;
+
+            // 3. If pte.v = 0, or if pte.r = 0 and pte.w = 1, stop and raise a page-fault
+            //    exception corresponding to the original access type.
+            let v = pte & 1;
+            let r = (pte >> 1) & 1;
+            let w = (pte >> 2) & 1;
+            let x = (pte >> 3) & 1;
+            if v == 0 || (r == 0 && w == 1) {
+                match access_type {
+                    AccessType::Instruction => return Err(Exception::InstructionPageFault),
+                    AccessType::Load => return Err(Exception::LoadPageFault),
+                    AccessType::Store => return Err(Exception::StoreAMOPageFault),
+                }
+            }
+
+            // 4. Otherwise, the PTE is valid. If pte.r = 1 or pte.x = 1, go to step 5.
+            //    Otherwise, this PTE is a pointer to the next level of the page table.
+            //    Let i = i − 1. If i < 0, stop and raise a page-fault exception
+            //    corresponding to the original access type. Otherwise,
+            //    let a = pte.ppn × PAGESIZE and go to step 2.
+            if r == 1 || x == 1 {
+                break;
+            }
+            i -= 1;
+            let ppn = (pte >> 10) & 0x0fff_ffff_ffff;
+            a = ppn * PAGE_SIZE;
+            if i < 0 {
+                match access_type {
+                    AccessType::Instruction => return Err(Exception::InstructionPageFault),
+                    AccessType::Load => return Err(Exception::LoadPageFault),
+                    AccessType::Store => return Err(Exception::StoreAMOPageFault),
+                }
+            }
+        }
+
+        // A leaf PTE has been found.
+        let ppn = [
+            (pte >> 10) & 0x1ff,
+            (pte >> 19) & 0x1ff,
+            (pte >> 28) & 0x03ff_ffff,
+        ];
+
+        // 8. The translation is successful. The translated physical address is given as
+        //    follows:
+        //    • pa.pgoff = va.pgoff.
+        //    • If i > 0, then this is a superpage translation and pa.ppn[i−1:0] =
+        //    va.vpn[i−1:0].
+        //    • pa.ppn[LEVELS−1:i] = pte.ppn[LEVELS−1:i].
+        let offset = addr & 0xfff;
+        match i {
+            0 => {
+                let ppn = (pte >> 10) & 0x0fff_ffff_ffff;
+                Ok((ppn << 12) | offset)
+            }
+            1 => {
+                // Superpage translation. A superpage is a memory page of larger size than an
+                // ordinary page (4 KiB). It reduces TLB misses and improves performance.
+                Ok((ppn[2] << 30) | (ppn[1] << 21) | (vpn[0] << 12) | offset)
+            }
+            2 => {
+                // Superpage translation. A superpage is a memory page of larger size than an
+                // ordinary page (4 KiB). It reduces TLB misses and improves performance.
+                Ok((ppn[2] << 30) | (vpn[1] << 21) | (vpn[0] << 12) | offset)
+            }
+            _ => match access_type {
+                AccessType::Instruction => return Err(Exception::InstructionPageFault),
+                AccessType::Load => return Err(Exception::LoadPageFault),
+                AccessType::Store => return Err(Exception::StoreAMOPageFault),
+            },
+        }
+    }
+
+    pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+        let p_addr = self.translate(addr, AccessType::Load)?;
+        self.bus.load(p_addr, size)
+    }
+
+    pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+        let p_addr = self.translate(addr, AccessType::Store)?;
+        self.bus.store(p_addr, size, value)
+    }
+
     /// Get an instruction from the memory.
     pub fn fetch(&mut self) -> Result<u64, Exception> {
-        match self.bus.load(self.pc, 32) {
+        let p_pc = self.translate(self.pc, AccessType::Instruction)?;
+        match self.bus.load(p_pc, 32) {
             Ok(inst) => Ok(inst),
             Err(_e) => Err(Exception::InstructionAccessFault),
         }
@@ -257,37 +404,37 @@ impl Cpu {
                 match funct3 {
                     0x0 => {
                         // lb
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val as i8 as i64 as u64;
                     }
                     0x1 => {
                         // lh
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val as i16 as i64 as u64;
                     }
                     0x2 => {
                         // lw
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val as i32 as i64 as u64;
                     }
                     0x3 => {
                         // ld
-                        let val = self.bus.load(addr, 64)?;
+                        let val = self.load(addr, 64)?;
                         self.regs[rd] = val;
                     }
                     0x4 => {
                         // lbu
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val;
                     }
                     0x5 => {
                         // lhu
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val;
                     }
                     0x6 => {
                         // lwu
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val;
                     }
                     _ => {}
@@ -388,10 +535,10 @@ impl Cpu {
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
                 match funct3 {
-                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
-                    0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
-                    0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
-                    0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
+                    0x0 => self.store(addr, 8, self.regs[rs2])?,  // sb
+                    0x1 => self.store(addr, 16, self.regs[rs2])?, // sh
+                    0x2 => self.store(addr, 32, self.regs[rs2])?, // sw
+                    0x3 => self.store(addr, 64, self.regs[rs2])?, // sd
                     _ => {}
                 }
             }
@@ -404,28 +551,28 @@ impl Cpu {
                 match (funct3, funct5) {
                     (0x2, 0x00) => {
                         // amoadd.w
-                        let t = self.bus.load(self.regs[rs1], 32)?;
+                        let t = self.load(self.regs[rs1], 32)?;
                         self.bus
                             .store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
                         self.regs[rd] = t;
                     }
                     (0x3, 0x00) => {
                         // amoadd.d
-                        let t = self.bus.load(self.regs[rs1], 64)?;
+                        let t = self.load(self.regs[rs1], 64)?;
                         self.bus
                             .store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
                         self.regs[rd] = t;
                     }
                     (0x2, 0x01) => {
                         // amoswap.w
-                        let t = self.bus.load(self.regs[rs1], 32)?;
-                        self.bus.store(self.regs[rs1], 32, self.regs[rs2])?;
+                        let t = self.load(self.regs[rs1], 32)?;
+                        self.store(self.regs[rs1], 32, self.regs[rs2])?;
                         self.regs[rd] = t;
                     }
                     (0x3, 0x01) => {
                         // amoswap.d
-                        let t = self.bus.load(self.regs[rs1], 64)?;
-                        self.bus.store(self.regs[rs1], 64, self.regs[rs2])?;
+                        let t = self.load(self.regs[rs1], 64)?;
+                        self.store(self.regs[rs1], 64, self.regs[rs2])?;
                         self.regs[rd] = t;
                     }
                     _ => {}
@@ -682,24 +829,40 @@ impl Cpu {
                         let t = self.csrs[csr_addr];
                         self.csrs[csr_addr] = self.regs[rs1];
                         self.regs[rd] = t;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     0x2 => {
                         // csrrs
                         let t = self.csrs[csr_addr];
                         self.csrs[csr_addr] = t | self.regs[rs1];
                         self.regs[rd] = t;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     0x3 => {
                         // csrrc
                         let t = self.csrs[csr_addr];
                         self.csrs[csr_addr] = t & (!self.regs[rs1]);
                         self.regs[rd] = t;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     0x5 => {
                         // csrrwi
                         let zimm = rs1 as u64;
                         self.regs[rd] = self.csrs[csr_addr];
                         self.csrs[csr_addr] = zimm;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     0x6 => {
                         // csrrsi
@@ -707,6 +870,10 @@ impl Cpu {
                         let t = self.csrs[csr_addr];
                         self.csrs[csr_addr] = t | zimm;
                         self.regs[rd] = t;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     0x7 => {
                         // csrrci
@@ -714,6 +881,10 @@ impl Cpu {
                         let t = self.csrs[csr_addr];
                         self.csrs[csr_addr] = t & (!zimm);
                         self.regs[rd] = t;
+
+                        if csr_addr == SATP {
+                            self.update_paging();
+                        }
                     }
                     _ => {}
                 }

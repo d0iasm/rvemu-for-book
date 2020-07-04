@@ -176,7 +176,10 @@ impl Virtio {
         // we only tell device the first index in our chain of descriptors.
         let index = cpu
             .bus
-            .load(avail_addr.wrapping_add(offset % DESC_NUM).wrapping_add(2), 16)
+            .load(
+                avail_addr.wrapping_add(offset % DESC_NUM).wrapping_add(2),
+                16,
+            )
             .expect("failed to read index");
 
         // Read `VRingDesc`, virtio descriptors.
@@ -206,11 +209,11 @@ impl Virtio {
             .expect("failed to read an address field in a descriptor");
         let len1 = cpu
             .bus
-            .load(desc_addr1.wrapping_add(8),32)
+            .load(desc_addr1.wrapping_add(8), 32)
             .expect("failed to read a length field in a descriptor");
         let flags1 = cpu
             .bus
-            .load(desc_addr1.wrapping_add(12),16)
+            .load(desc_addr1.wrapping_add(12), 16)
             .expect("failed to read a flags field in a descriptor");
 
         // Read `virtio_blk_outhdr`. Add 8 because of its structure.

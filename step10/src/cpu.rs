@@ -257,7 +257,7 @@ impl Cpu {
         self.page_table = (self.csrs[SATP] & ((1 << 44) - 1)) * PAGE_SIZE;
 
         // Read the MODE field, which selects the current address-translation scheme.
-        let mode = self.csrs[SATP] & (0b1111 << 60);
+        let mode = self.csrs[SATP] >> 60;
 
         // Enable the SV39 paging if the value of the mode field is 8.
         if mode == 8 {
@@ -552,15 +552,13 @@ impl Cpu {
                     (0x2, 0x00) => {
                         // amoadd.w
                         let t = self.load(self.regs[rs1], 32)?;
-                        self.bus
-                            .store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
+                        self.store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
                         self.regs[rd] = t;
                     }
                     (0x3, 0x00) => {
                         // amoadd.d
                         let t = self.load(self.regs[rs1], 64)?;
-                        self.bus
-                            .store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
+                        self.store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
                         self.regs[rd] = t;
                     }
                     (0x2, 0x01) => {
@@ -587,6 +585,10 @@ impl Cpu {
                     (0x0, 0x00) => {
                         // add
                         self.regs[rd] = self.regs[rs1].wrapping_add(self.regs[rs2]);
+                    }
+                    (0x0, 0x01) => {
+                        // mul
+                        self.regs[rd] = self.regs[rs1].wrapping_mul(self.regs[rs2]);
                     }
                     (0x0, 0x20) => {
                         // sub

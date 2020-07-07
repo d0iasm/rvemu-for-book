@@ -66,6 +66,17 @@ pub const SIP: usize = 0x144;
 /// Supervisor address translation and protection.
 pub const SATP: usize = 0x180;
 
+// SSTATUS fields.
+pub const SSTATUS_SIE: u64 = 0x00000002;
+pub const SSTATUS_SPIE: u64 = 0x00000020;
+pub const SSTATUS_SPP: u64 = 0x00000100;
+pub const SSTATUS_VS: u64 = 0x00000600;
+pub const SSTATUS_FS: u64 = 0x00006000;
+pub const SSTATUS_XS: u64 = 0x00018000;
+pub const SSTATUS_SUM: u64 = 0x00040000;
+pub const SSTATUS_MXR: u64 = 0x00080000;
+pub const SSTATUS_UXL: u64 = 0x3_00000000;
+
 /// The privileged mode.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
 pub enum Mode {
@@ -99,11 +110,64 @@ pub struct Cpu {
     pub bus: Bus,
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
-    pub csrs: [u64; 4096],
+    pub csrs: Csr,
     /// SV39 paging flag.
     pub enable_paging: bool,
     /// physical page number (PPN) × PAGE_SIZE (4096).
     pub page_table: u64,
+}
+
+pub struct Csr {
+    csrs: [u64; 4096],
+}
+
+impl Csr {
+    fn new() -> Self {
+        Self { csrs: [0; 4096] }
+    }
+
+    pub fn load(&self, addr: usize) -> u64 {
+        match addr {
+            SSTATUS => {
+                let mask = SSTATUS_SIE
+                    | SSTATUS_SPIE
+                    | SSTATUS_SPP
+                    | SSTATUS_FS
+                    | SSTATUS_XS
+                    | SSTATUS_SUM
+                    | SSTATUS_MXR
+                    | SSTATUS_UXL;
+                self.csrs[MSTATUS] & mask
+            }
+            SIE => self.csrs[MIE] & self.csrs[MIDELEG],
+            SIP => self.csrs[MIP] & self.csrs[MIDELEG],
+            _ => self.csrs[addr],
+        }
+    }
+
+    pub fn store(&mut self, addr: usize, value: u64) {
+        match addr {
+            SSTATUS => {
+                let mask = SSTATUS_SIE
+                    | SSTATUS_SPIE
+                    | SSTATUS_SPP
+                    | SSTATUS_FS
+                    | SSTATUS_XS
+                    | SSTATUS_SUM
+                    | SSTATUS_MXR;
+                self.csrs[MSTATUS] = (self.csrs[MSTATUS] & !mask) | (value & mask);
+            }
+            SIE => {
+                self.csrs[MIE] =
+                    (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
+            }
+            SIP => {
+                let mask = MIP_SSIP & self.csrs[MIDELEG];
+                self.csrs[MIP] = (self.csrs[MIP] & !mask) | (value & mask);
+            }
+            _ => self.csrs[addr] = value,
+        }
+    }
 }
 
 impl Cpu {
@@ -119,7 +183,7 @@ impl Cpu {
             pc: MEMORY_BASE,
             mode: Mode::Machine,
             bus: Bus::new(binary, disk_image),
-            csrs: [0; 4096],
+            csrs: Csr::new(),
             enable_paging: false,
             page_table: 0,
         }
@@ -163,11 +227,17 @@ impl Cpu {
             "{}\n{}",
             format!(
                 "mstatus={:>#18x} mtvec={:>#18x} mepc={:>#18x} mcause={:>#18x}",
-                self.csrs[MSTATUS], self.csrs[MTVEC], self.csrs[MEPC], self.csrs[MCAUSE],
+                self.csrs.load(MSTATUS),
+                self.csrs.load(MTVEC),
+                self.csrs.load(MEPC),
+                self.csrs.load(MCAUSE),
             ),
             format!(
                 "sstatus={:>#18x} stvec={:>#18x} sepc={:>#18x} scause={:>#18x}",
-                self.csrs[SSTATUS], self.csrs[STVEC], self.csrs[SEPC], self.csrs[SCAUSE],
+                self.csrs.load(SSTATUS),
+                self.csrs.load(STVEC),
+                self.csrs.load(SEPC),
+                self.csrs.load(SCAUSE),
             ),
         );
         println!("{}", output);
@@ -180,13 +250,13 @@ impl Cpu {
         match self.mode {
             Mode::Machine => {
                 // Check if the MIE bit is enabled.
-                if (self.csrs[MSTATUS] >> 3) & 1 == 0 {
+                if (self.csrs.load(MSTATUS) >> 3) & 1 == 0 {
                     return None;
                 }
             }
             Mode::Supervisor => {
                 // Check if the SIE bit is enabled.
-                if (self.csrs[SSTATUS] >> 1) & 1 == 0 {
+                if (self.csrs.load(SSTATUS) >> 1) & 1 == 0 {
                     return None;
                 }
             }
@@ -210,7 +280,7 @@ impl Cpu {
             self.bus
                 .store(PLIC_SCLAIM, 32, irq)
                 .expect("failed to write an IRQ to the PLIC_SCLAIM");
-            self.csrs[MIP] = self.csrs[MIP] | MIP_SEIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) | MIP_SEIP);
         }
 
         // "An interrupt i will be taken if bit i is set in both mip and mie, and if interrupts are globally enabled.
@@ -221,43 +291,47 @@ impl Cpu {
         // (SIE or UIE in mstatus) is set, or if the current privilege mode is less than the delegated privilege
         // mode."
 
-        let pending = self.csrs[MIE] & self.csrs[MIP];
+        let pending = self.csrs.load(MIE) & self.csrs.load(MIP);
 
         if (pending & MIP_MEIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_MEIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MEIP);
             return Some(Interrupt::MachineExternalInterrupt);
         }
         if (pending & MIP_MSIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_MSIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MSIP);
             return Some(Interrupt::MachineSoftwareInterrupt);
         }
         if (pending & MIP_MTIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_MTIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MTIP);
             return Some(Interrupt::MachineTimerInterrupt);
         }
         if (pending & MIP_SEIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_SEIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_SEIP);
             return Some(Interrupt::SupervisorExternalInterrupt);
         }
         if (pending & MIP_SSIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_SSIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_SSIP);
             return Some(Interrupt::SupervisorSoftwareInterrupt);
         }
         if (pending & MIP_STIP) != 0 {
-            self.csrs[MIP] = self.csrs[MIP] & !MIP_STIP;
+            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_STIP);
             return Some(Interrupt::SupervisorTimerInterrupt);
         }
         None
     }
 
     /// Update the physical page number (PPN) and the addressing mode.
-    fn update_paging(&mut self) {
+    fn update_paging(&mut self, csr_addr: usize) {
+        if csr_addr != SATP {
+            return;
+        }
+
         // Read the physical page number (PPN) of the root page table, i.e., its
         // supervisor physical address divided by 4 KiB.
-        self.page_table = (self.csrs[SATP] & ((1 << 44) - 1)) * PAGE_SIZE;
+        self.page_table = (self.csrs.load(SATP) & ((1 << 44) - 1)) * PAGE_SIZE;
 
         // Read the MODE field, which selects the current address-translation scheme.
-        let mode = self.csrs[SATP] >> 60;
+        let mode = self.csrs.load(SATP) >> 60;
 
         // Enable the SV39 paging if the value of the mode field is 8.
         if mode == 8 {
@@ -774,24 +848,28 @@ impl Cpu {
                                 // - Sets CSRs[sstatus].SIE to CSRs[sstatus].SPIE.
                                 // - Sets CSRs[sstatus].SPIE to 1.
                                 // - Sets CSRs[sstatus].SPP to 0.
-                                self.pc = self.csrs[SEPC];
+                                self.pc = self.csrs.load(SEPC);
                                 // When the SRET instruction is executed to return from the trap
                                 // handler, the privilege level is set to user mode if the SPP
                                 // bit is 0, or supervisor mode if the SPP bit is 1. The SPP bit
                                 // is the 8th of the SSTATUS csr.
-                                self.mode = match (self.csrs[SSTATUS] >> 8) & 1 {
+                                self.mode = match (self.csrs.load(SSTATUS) >> 8) & 1 {
                                     1 => Mode::Supervisor,
                                     _ => Mode::User,
                                 };
                                 // The SPIE bit is the 5th and the SIE bit is the 1st of the
                                 // SSTATUS csr.
-                                self.csrs[SSTATUS] = if ((self.csrs[SSTATUS] >> 5) & 1) == 1 {
-                                    self.csrs[SSTATUS] | (1 << 1)
-                                } else {
-                                    self.csrs[SSTATUS] & !(1 << 1)
-                                };
-                                self.csrs[SSTATUS] = self.csrs[SSTATUS] | (1 << 5);
-                                self.csrs[SSTATUS] = self.csrs[SSTATUS] & !(1 << 8);
+                                self.csrs.store(
+                                    SSTATUS,
+                                    if ((self.csrs.load(SSTATUS) >> 5) & 1) == 1 {
+                                        self.csrs.load(SSTATUS) | (1 << 1)
+                                    } else {
+                                        self.csrs.load(SSTATUS) & !(1 << 1)
+                                    },
+                                );
+                                self.csrs.store(SSTATUS, self.csrs.load(SSTATUS) | (1 << 5));
+                                self.csrs
+                                    .store(SSTATUS, self.csrs.load(SSTATUS) & !(1 << 8));
                             }
                             (0x2, 0x18) => {
                                 // mret
@@ -802,22 +880,26 @@ impl Cpu {
                                 // - Sets CSRs[mstatus].MIE to CSRs[mstatus].MPIE.
                                 // - Sets CSRs[mstatus].MPIE to 1.
                                 // - Sets CSRs[mstatus].MPP to 0.
-                                self.pc = self.csrs[MEPC];
+                                self.pc = self.csrs.load(MEPC);
                                 // MPP is two bits wide at [11..12] of the MSTATUS csr.
-                                self.mode = match (self.csrs[MSTATUS] >> 11) & 0b11 {
+                                self.mode = match (self.csrs.load(MSTATUS) >> 11) & 0b11 {
                                     2 => Mode::Machine,
                                     1 => Mode::Supervisor,
                                     _ => Mode::User,
                                 };
                                 // The MPIE bit is the 7th and the MIE bit is the 3rd of the
                                 // MSTATUS csr.
-                                self.csrs[MSTATUS] = if ((self.csrs[MSTATUS] >> 7) & 1) == 1 {
-                                    self.csrs[MSTATUS] | (1 << 3)
-                                } else {
-                                    self.csrs[MSTATUS] & !(1 << 3)
-                                };
-                                self.csrs[MSTATUS] = self.csrs[MSTATUS] | (1 << 7);
-                                self.csrs[MSTATUS] = self.csrs[MSTATUS] & !(0b11 << 11);
+                                self.csrs.store(
+                                    MSTATUS,
+                                    if ((self.csrs.load(MSTATUS) >> 7) & 1) == 1 {
+                                        self.csrs.load(MSTATUS) | (1 << 3)
+                                    } else {
+                                        self.csrs.load(MSTATUS) & !(1 << 3)
+                                    },
+                                );
+                                self.csrs.store(MSTATUS, self.csrs.load(MSTATUS) | (1 << 7));
+                                self.csrs
+                                    .store(MSTATUS, self.csrs.load(MSTATUS) & !(0b11 << 11));
                             }
                             (_, 0x9) => {
                                 // sfence.vma
@@ -828,65 +910,53 @@ impl Cpu {
                     }
                     0x1 => {
                         // csrrw
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = self.regs[rs1];
+                        let t = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, self.regs[rs1]);
                         self.regs[rd] = t;
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     0x2 => {
                         // csrrs
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t | self.regs[rs1];
+                        let t = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, t | self.regs[rs1]);
                         self.regs[rd] = t;
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     0x3 => {
                         // csrrc
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t & (!self.regs[rs1]);
+                        let t = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, t & (!self.regs[rs1]));
                         self.regs[rd] = t;
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     0x5 => {
                         // csrrwi
                         let zimm = rs1 as u64;
-                        self.regs[rd] = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = zimm;
+                        self.regs[rd] = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, zimm);
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     0x6 => {
                         // csrrsi
                         let zimm = rs1 as u64;
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t | zimm;
+                        let t = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, t | zimm);
                         self.regs[rd] = t;
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     0x7 => {
                         // csrrci
                         let zimm = rs1 as u64;
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t & (!zimm);
+                        let t = self.csrs.load(csr_addr);
+                        self.csrs.store(csr_addr, t & (!zimm));
                         self.regs[rd] = t;
 
-                        if csr_addr == SATP {
-                            self.update_paging();
-                        }
+                        self.update_paging(csr_addr);
                     }
                     _ => {}
                 }

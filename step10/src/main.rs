@@ -27,7 +27,7 @@ fn main() -> io::Result<()> {
 
     let mut disk_image = Vec::new();
     if args.len() == 3 {
-        let mut file = File::open(&args[1])?;
+        let mut file = File::open(&args[2])?;
         file.read_to_end(&mut disk_image)?;
     }
 
@@ -55,19 +55,12 @@ fn main() -> io::Result<()> {
             Ok(_) => {}
             Err(exception) => {
                 exception.take_trap(&mut cpu);
-                println!("exception: {:?}", exception);
-                break;
             }
         }
 
         match cpu.check_pending_interrupt() {
             Some(interrupt) => interrupt.take_trap(&mut cpu),
             None => {}
-        }
-
-        // This is a workaround for avoiding an infinite loop.
-        if cpu.pc == 0 {
-            break;
         }
     }
     cpu.dump_registers();

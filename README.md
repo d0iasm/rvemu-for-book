@@ -3,7 +3,7 @@ Reference implementation of [the book](https://book.rvemu.app/), *Writing a RISC
 
 This is based on original RISC-V emulator [rvemu](https://github.com/d0iasm/rvemu) in Rust.
 
-# How to run xv6
+## How to run xv6
 ```
 $ cd step10 // move to the step10 directory
 $ cargo run ./xv6-kernel.bin ./xv6-fs.img
@@ -11,7 +11,8 @@ $ cargo run ./xv6-kernel.bin ./xv6-fs.img
 
 ![demo.png](https://raw.githubusercontent.com/d0iasm/rvemu-for-book/master/demo.png)
 
-# Step to implement a RISC-V emulator
+## Step to implement a RISC-V emulator
+See https://book.rvemu.app/
 - Step 1: Setup and Implement Two Instructions
 - Step 2: RV64I Base Integer Instruction Set
 - Step 3: Control and Status Registers

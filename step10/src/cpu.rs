@@ -66,17 +66,6 @@ pub const SIP: usize = 0x144;
 /// Supervisor address translation and protection.
 pub const SATP: usize = 0x180;
 
-// SSTATUS fields.
-pub const SSTATUS_SIE: u64 = 0x00000002;
-pub const SSTATUS_SPIE: u64 = 0x00000020;
-pub const SSTATUS_SPP: u64 = 0x00000100;
-pub const SSTATUS_VS: u64 = 0x00000600;
-pub const SSTATUS_FS: u64 = 0x00006000;
-pub const SSTATUS_XS: u64 = 0x00018000;
-pub const SSTATUS_SUM: u64 = 0x00040000;
-pub const SSTATUS_MXR: u64 = 0x00080000;
-pub const SSTATUS_UXL: u64 = 0x3_00000000;
-
 /// The privileged mode.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
 pub enum Mode {
@@ -128,43 +117,25 @@ impl Csr {
 
     pub fn load(&self, addr: usize) -> u64 {
         match addr {
-            SSTATUS => {
-                let mask = SSTATUS_SIE
-                    | SSTATUS_SPIE
-                    | SSTATUS_SPP
-                    | SSTATUS_FS
-                    | SSTATUS_XS
-                    | SSTATUS_SUM
-                    | SSTATUS_MXR
-                    | SSTATUS_UXL;
-                self.csrs[MSTATUS] & mask
-            }
             SIE => self.csrs[MIE] & self.csrs[MIDELEG],
-            SIP => self.csrs[MIP] & self.csrs[MIDELEG],
+            // TODO: Check how to handle SIP in xv6
+            //SIP => self.csrs[MIP] & self.csrs[MIDELEG],
             _ => self.csrs[addr],
         }
     }
 
     pub fn store(&mut self, addr: usize, value: u64) {
         match addr {
-            SSTATUS => {
-                let mask = SSTATUS_SIE
-                    | SSTATUS_SPIE
-                    | SSTATUS_SPP
-                    | SSTATUS_FS
-                    | SSTATUS_XS
-                    | SSTATUS_SUM
-                    | SSTATUS_MXR;
-                self.csrs[MSTATUS] = (self.csrs[MSTATUS] & !mask) | (value & mask);
-            }
             SIE => {
                 self.csrs[MIE] =
                     (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
             }
+            /*
             SIP => {
                 let mask = MIP_SSIP & self.csrs[MIDELEG];
                 self.csrs[MIP] = (self.csrs[MIP] & !mask) | (value & mask);
             }
+            */
             _ => self.csrs[addr] = value,
         }
     }
@@ -347,9 +318,10 @@ impl Cpu {
             return Ok(addr);
         }
 
-        // 4.3.2 Virtual Address Translation Process
-        // (The RISC-V Instruction Set Manual Volume II-Privileged Architecture_20190608)
-        // A virtual address va is translated into a physical address pa as follows:
+        // The following comments are cited from 4.3.2 Virtual Address Translation Process
+        // in "The RISC-V Instruction Set Manual Volume II-Privileged Architecture_20190608".
+
+        // "A virtual address va is translated into a physical address pa as follows:"
         let levels = 3;
         let vpn = [
             (addr >> 12) & 0x1ff,
@@ -357,19 +329,19 @@ impl Cpu {
             (addr >> 30) & 0x1ff,
         ];
 
-        // 1. Let a be satp.ppn × PAGESIZE, and let i = LEVELS − 1. (For Sv32, PAGESIZE=212
-        //    and LEVELS=2.)
+        // "1. Let a be satp.ppn × PAGESIZE, and let i = LEVELS − 1. (For Sv32, PAGESIZE=212
+        //     and LEVELS=2.)"
         let mut a = self.page_table;
         let mut i: i64 = levels - 1;
         let mut pte;
         loop {
-            // 2. Let pte be the value of the PTE at address a+va.vpn[i]×PTESIZE. (For Sv32,
-            //    PTESIZE=4.) If accessing pte violates a PMA or PMP check, raise an access
-            //    exception corresponding to the original access type.
+            // "2. Let pte be the value of the PTE at address a+va.vpn[i]×PTESIZE. (For Sv32,
+            //     PTESIZE=4.) If accessing pte violates a PMA or PMP check, raise an access
+            //     exception corresponding to the original access type."
             pte = self.bus.load(a + vpn[i as usize] * 8, 64)?;
 
-            // 3. If pte.v = 0, or if pte.r = 0 and pte.w = 1, stop and raise a page-fault
-            //    exception corresponding to the original access type.
+            // "3. If pte.v = 0, or if pte.r = 0 and pte.w = 1, stop and raise a page-fault
+            //     exception corresponding to the original access type."
             let v = pte & 1;
             let r = (pte >> 1) & 1;
             let w = (pte >> 2) & 1;
@@ -382,11 +354,11 @@ impl Cpu {
                 }
             }
 
-            // 4. Otherwise, the PTE is valid. If pte.r = 1 or pte.x = 1, go to step 5.
-            //    Otherwise, this PTE is a pointer to the next level of the page table.
-            //    Let i = i − 1. If i < 0, stop and raise a page-fault exception
-            //    corresponding to the original access type. Otherwise,
-            //    let a = pte.ppn × PAGESIZE and go to step 2.
+            // "4. Otherwise, the PTE is valid. If pte.r = 1 or pte.x = 1, go to step 5.
+            //     Otherwise, this PTE is a pointer to the next level of the page table.
+            //     Let i = i − 1. If i < 0, stop and raise a page-fault exception
+            //     corresponding to the original access type. Otherwise,
+            //     let a = pte.ppn × PAGESIZE and go to step 2."
             if r == 1 || x == 1 {
                 break;
             }
@@ -409,12 +381,30 @@ impl Cpu {
             (pte >> 28) & 0x03ff_ffff,
         ];
 
-        // 8. The translation is successful. The translated physical address is given as
-        //    follows:
-        //    • pa.pgoff = va.pgoff.
-        //    • If i > 0, then this is a superpage translation and pa.ppn[i−1:0] =
-        //    va.vpn[i−1:0].
-        //    • pa.ppn[LEVELS−1:i] = pte.ppn[LEVELS−1:i].
+        // We skip implementing from step 5 to 7.
+
+        // "5. A leaf PTE has been found. Determine if the requested memory access is allowed by
+        //     the pte.r, pte.w, pte.x, and pte.u bits, given the current privilege mode and the
+        //     value of the SUM and MXR fields of the mstatus register. If not, stop and raise a
+        //     page-fault exception corresponding to the original access type."
+
+        // "6. If i > 0 and pte.ppn[i − 1 : 0] ̸= 0, this is a misaligned superpage; stop and
+        //     raise a page-fault exception corresponding to the original access type."
+
+        // "7. If pte.a = 0, or if the memory access is a store and pte.d = 0, either raise a
+        //     page-fault exception corresponding to the original access type, or:
+        //     • Set pte.a to 1 and, if the memory access is a store, also set pte.d to 1.
+        //     • If this access violates a PMA or PMP check, raise an access exception
+        //     corresponding to the original access type.
+        //     • This update and the loading of pte in step 2 must be atomic; in particular, no
+        //     intervening store to the PTE may be perceived to have occurred in-between."
+
+        // "8. The translation is successful. The translated physical address is given as
+        //     follows:
+        //     • pa.pgoff = va.pgoff.
+        //     • If i > 0, then this is a superpage translation and pa.ppn[i−1:0] =
+        //     va.vpn[i−1:0].
+        //     • pa.ppn[LEVELS−1:i] = pte.ppn[LEVELS−1:i]."
         let offset = addr & 0xfff;
         match i {
             0 => {

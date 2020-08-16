@@ -511,7 +511,13 @@ impl Cpu {
                         let val = self.load(addr, 32)?;
                         self.regs[rd] = val;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x0f => {
@@ -519,7 +525,13 @@ impl Cpu {
                 // instruction sequentially on a single thread.
                 match funct3 {
                     0x0 => {} // fence
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x13 => {
@@ -598,10 +610,22 @@ impl Cpu {
                                 self.regs[rd] =
                                     (self.regs[rs1] as i32).wrapping_shr(shamt) as i64 as u64;
                             }
-                            _ => {}
+                            _ => {
+                                println!(
+                                    "not implemented yet: opcode {:#x} funct7 {:#x}",
+                                    opcode, funct7
+                                );
+                                return Err(Exception::IllegalInstruction);
+                            }
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x23 => {
@@ -617,8 +641,7 @@ impl Cpu {
                 }
             }
             0x2f => {
-                // RV64A: “A” standard extension for atomic
-                // instructions
+                // RV64A: "A" standard extension for atomic instructions
                 let funct5 = (funct7 & 0b1111100) >> 2;
                 let _aq = (funct7 & 0b0000010) >> 1; // acquire access
                 let _rl = funct7 & 0b0000001; // release access
@@ -647,7 +670,13 @@ impl Cpu {
                         self.store(self.regs[rs1], 64, self.regs[rs2])?;
                         self.regs[rd] = t;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x33 => {
@@ -708,7 +737,13 @@ impl Cpu {
                         // and
                         self.regs[rd] = self.regs[rs1] & self.regs[rs2];
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x37 => {
@@ -741,7 +776,24 @@ impl Cpu {
                         // sraw
                         self.regs[rd] = ((self.regs[rs1] as i32) >> (shamt as i32)) as u64;
                     }
-                    _ => {}
+                    (0x7, 0x01) => {
+                        // remuw
+                        self.regs[rd] = match self.regs[rs2] {
+                            0 => self.regs[rs1],
+                            _ => {
+                                let dividend = self.regs[rs1] as u32;
+                                let divisor = self.regs[rs2] as u32;
+                                dividend.wrapping_rem(divisor) as i32 as u64
+                            }
+                        };
+                    }
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x63 => {
@@ -788,11 +840,18 @@ impl Cpu {
                             self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             0x67 => {
                 // jalr
+                // Note: Don't add 4 because the pc already moved on.
                 let t = self.pc;
 
                 let imm = ((((inst & 0xfff00000) as i32) as i64) >> 20) as u64;
@@ -905,7 +964,13 @@ impl Cpu {
                                 // sfence.vma
                                 // Do nothing.
                             }
-                            _ => {}
+                            _ => {
+                                println!(
+                                    "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                                    opcode, funct3, funct7
+                                );
+                                return Err(Exception::IllegalInstruction);
+                            }
                         }
                     }
                     0x1 => {
@@ -958,7 +1023,13 @@ impl Cpu {
 
                         self.update_paging(csr_addr);
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(Exception::IllegalInstruction);
+                    }
                 }
             }
             _ => {

@@ -772,6 +772,20 @@ impl Cpu {
                         // srlw
                         self.regs[rd] = (self.regs[rs1] as u32).wrapping_shr(shamt) as i32 as u64;
                     }
+                    (0x5, 0x01) => {
+                        // divu
+                        self.regs[rd] = match self.regs[rs2] {
+                            0 => {
+                                // TODO: Set DZ (Divide by Zero) in the FCSR csr flag to 1.
+                                0xffffffff_ffffffff
+                            }
+                            _ => {
+                                let dividend = self.regs[rs1];
+                                let divisor = self.regs[rs2];
+                                dividend.wrapping_div(divisor)
+                            }
+                        };
+                    }
                     (0x5, 0x20) => {
                         // sraw
                         self.regs[rd] = ((self.regs[rs1] as i32) >> (shamt as i32)) as u64;

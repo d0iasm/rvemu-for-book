@@ -1,0 +1,76 @@
+diff -x target -r step08/Cargo.lock step09/Cargo.lock
+4c4
+< name = "step8-rvemu-for-book"
+---
+> name = "step9-rvemu-for-book"
+diff -x target -r step08/Cargo.toml step09/Cargo.toml
+2c2
+< name = "step8-rvemu-for-book"
+---
+> name = "step9-rvemu-for-book"
+diff -x target -r step08/src/bus.rs step09/src/bus.rs
+8a9
+> use crate::virtio::*;
+27a29,33
+> /// The address which virtio starts.
+> pub const VIRTIO_BASE: u64 = 0x1000_1000;
+> /// The size of virtio.
+> pub const VIRTIO_SIZE: u64 = 0x1000;
+> 
+40a47
+>     pub virtio: Virtio,
+46c53
+<     pub fn new(binary: Vec<u8>) -> Bus {
+---
+>     pub fn new(binary: Vec<u8>, disk_image: Vec<u8>) -> Bus {
+50a58
+>             virtio: Virtio::new(disk_image),
+64a73,75
+>         if VIRTIO_BASE <= addr && addr < VIRTIO_BASE + VIRTIO_SIZE {
+>             return self.virtio.load(addr, size);
+>         }
+79a91,93
+>         }
+>         if VIRTIO_BASE <= addr && addr < VIRTIO_BASE + VIRTIO_SIZE {
+>             return self.virtio.store(addr, size, value);
+diff -x target -r step08/src/cpu.rs step09/src/cpu.rs
+9a10
+> use crate::virtio::*;
+91c92
+<     pub fn new(binary: Vec<u8>) -> Self {
+---
+>     pub fn new(binary: Vec<u8>, disk_image: Vec<u8>) -> Self {
+101c102
+<             bus: Bus::new(binary),
+---
+>             bus: Bus::new(binary, disk_image),
+180c181
+<         // Check external interrupt for uart.
+---
+>         // Check external interrupt for uart and virtio.
+183a185,189
+>         } else if self.bus.virtio.is_interrupting() {
+>             // Access disk by direct memory access (DMA). An interrupt is raised after a disk
+>             // access is done.
+>             Virtio::disk_access(self);
+>             irq = VIRTIO_IRQ;
+diff -x target -r step08/src/main.rs step09/src/main.rs
+7a8
+> mod virtio;
+20,21c21,22
+<     if args.len() != 2 {
+<         panic!("Usage: rvemu-for-book <filename>");
+---
+>     if (args.len() != 2) && (args.len() != 3) {
+>         panic!("Usage: rvemu-for-book <filename> <(option) image>");
+27c28,34
+<     let mut cpu = Cpu::new(binary);
+---
+>     let mut disk_image = Vec::new();
+>     if args.len() == 3 {
+>         let mut file = File::open(&args[2])?;
+>         file.read_to_end(&mut disk_image)?;
+>     }
+> 
+>     let mut cpu = Cpu::new(binary, disk_image);
+Only in step09/src: virtio.rs

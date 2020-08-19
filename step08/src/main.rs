@@ -57,11 +57,6 @@ fn main() -> io::Result<()> {
             Some(interrupt) => interrupt.take_trap(&mut cpu),
             None => {}
         }
-
-        // This is a workaround for avoiding an infinite loop.
-        if cpu.pc == 0 {
-            break;
-        }
     }
     cpu.dump_registers();
     println!("-----------------------------------------------------------------------------------------------------------");

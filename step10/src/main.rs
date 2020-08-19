@@ -55,6 +55,8 @@ fn main() -> io::Result<()> {
             Ok(_) => {}
             Err(exception) => {
                 exception.take_trap(&mut cpu);
+                println!("exception: {:?}", exception);
+                break;
             }
         }
 

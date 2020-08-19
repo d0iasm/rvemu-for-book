@@ -394,6 +394,7 @@ impl Cpu {
         }
     }
 
+    /// Load a value from a CSR.
     pub fn load_csr(&self, addr: usize) -> u64 {
         match addr {
             SIE => self.csrs[MIE] & self.csrs[MIDELEG],
@@ -401,6 +402,7 @@ impl Cpu {
         }
     }
 
+    /// Store a value to a CSR.
     pub fn store_csr(&mut self, addr: usize, value: u64) {
         match addr {
             SIE => {
@@ -411,11 +413,13 @@ impl Cpu {
         }
     }
 
+    /// Load a value from a memory.
     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
         let p_addr = self.translate(addr, AccessType::Load)?;
         self.bus.load(p_addr, size)
     }
 
+    /// Store a value to a memory.
     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
         let p_addr = self.translate(addr, AccessType::Store)?;
         self.bus.store(p_addr, size, value)

@@ -99,46 +99,11 @@ pub struct Cpu {
     pub bus: Bus,
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
-    pub csrs: Csr,
+    pub csrs: [u64; 4096],
     /// SV39 paging flag.
     pub enable_paging: bool,
     /// physical page number (PPN) × PAGE_SIZE (4096).
     pub page_table: u64,
-}
-
-pub struct Csr {
-    csrs: [u64; 4096],
-}
-
-impl Csr {
-    fn new() -> Self {
-        Self { csrs: [0; 4096] }
-    }
-
-    pub fn load(&self, addr: usize) -> u64 {
-        match addr {
-            SIE => self.csrs[MIE] & self.csrs[MIDELEG],
-            // TODO: Check how to handle SIP in xv6
-            //SIP => self.csrs[MIP] & self.csrs[MIDELEG],
-            _ => self.csrs[addr],
-        }
-    }
-
-    pub fn store(&mut self, addr: usize, value: u64) {
-        match addr {
-            SIE => {
-                self.csrs[MIE] =
-                    (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
-            }
-            /*
-            SIP => {
-                let mask = MIP_SSIP & self.csrs[MIDELEG];
-                self.csrs[MIP] = (self.csrs[MIP] & !mask) | (value & mask);
-            }
-            */
-            _ => self.csrs[addr] = value,
-        }
-    }
 }
 
 impl Cpu {
@@ -154,7 +119,7 @@ impl Cpu {
             pc: MEMORY_BASE,
             mode: Mode::Machine,
             bus: Bus::new(binary, disk_image),
-            csrs: Csr::new(),
+            csrs: [0; 4096],
             enable_paging: false,
             page_table: 0,
         }
@@ -198,17 +163,17 @@ impl Cpu {
             "{}\n{}",
             format!(
                 "mstatus={:>#18x} mtvec={:>#18x} mepc={:>#18x} mcause={:>#18x}",
-                self.csrs.load(MSTATUS),
-                self.csrs.load(MTVEC),
-                self.csrs.load(MEPC),
-                self.csrs.load(MCAUSE),
+                self.load_csr(MSTATUS),
+                self.load_csr(MTVEC),
+                self.load_csr(MEPC),
+                self.load_csr(MCAUSE),
             ),
             format!(
                 "sstatus={:>#18x} stvec={:>#18x} sepc={:>#18x} scause={:>#18x}",
-                self.csrs.load(SSTATUS),
-                self.csrs.load(STVEC),
-                self.csrs.load(SEPC),
-                self.csrs.load(SCAUSE),
+                self.load_csr(SSTATUS),
+                self.load_csr(STVEC),
+                self.load_csr(SEPC),
+                self.load_csr(SCAUSE),
             ),
         );
         println!("{}", output);
@@ -221,13 +186,13 @@ impl Cpu {
         match self.mode {
             Mode::Machine => {
                 // Check if the MIE bit is enabled.
-                if (self.csrs.load(MSTATUS) >> 3) & 1 == 0 {
+                if (self.load_csr(MSTATUS) >> 3) & 1 == 0 {
                     return None;
                 }
             }
             Mode::Supervisor => {
                 // Check if the SIE bit is enabled.
-                if (self.csrs.load(SSTATUS) >> 1) & 1 == 0 {
+                if (self.load_csr(SSTATUS) >> 1) & 1 == 0 {
                     return None;
                 }
             }
@@ -251,7 +216,7 @@ impl Cpu {
             self.bus
                 .store(PLIC_SCLAIM, 32, irq)
                 .expect("failed to write an IRQ to the PLIC_SCLAIM");
-            self.csrs.store(MIP, self.csrs.load(MIP) | MIP_SEIP);
+            self.store_csr(MIP, self.load_csr(MIP) | MIP_SEIP);
         }
 
         // "An interrupt i will be taken if bit i is set in both mip and mie, and if interrupts are globally enabled.
@@ -262,30 +227,30 @@ impl Cpu {
         // (SIE or UIE in mstatus) is set, or if the current privilege mode is less than the delegated privilege
         // mode."
 
-        let pending = self.csrs.load(MIE) & self.csrs.load(MIP);
+        let pending = self.load_csr(MIE) & self.load_csr(MIP);
 
         if (pending & MIP_MEIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MEIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_MEIP);
             return Some(Interrupt::MachineExternalInterrupt);
         }
         if (pending & MIP_MSIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MSIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_MSIP);
             return Some(Interrupt::MachineSoftwareInterrupt);
         }
         if (pending & MIP_MTIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_MTIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_MTIP);
             return Some(Interrupt::MachineTimerInterrupt);
         }
         if (pending & MIP_SEIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_SEIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_SEIP);
             return Some(Interrupt::SupervisorExternalInterrupt);
         }
         if (pending & MIP_SSIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_SSIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_SSIP);
             return Some(Interrupt::SupervisorSoftwareInterrupt);
         }
         if (pending & MIP_STIP) != 0 {
-            self.csrs.store(MIP, self.csrs.load(MIP) & !MIP_STIP);
+            self.store_csr(MIP, self.load_csr(MIP) & !MIP_STIP);
             return Some(Interrupt::SupervisorTimerInterrupt);
         }
         None
@@ -299,10 +264,10 @@ impl Cpu {
 
         // Read the physical page number (PPN) of the root page table, i.e., its
         // supervisor physical address divided by 4 KiB.
-        self.page_table = (self.csrs.load(SATP) & ((1 << 44) - 1)) * PAGE_SIZE;
+        self.page_table = (self.load_csr(SATP) & ((1 << 44) - 1)) * PAGE_SIZE;
 
         // Read the MODE field, which selects the current address-translation scheme.
-        let mode = self.csrs.load(SATP) >> 60;
+        let mode = self.load_csr(SATP) >> 60;
 
         // Enable the SV39 paging if the value of the mode field is 8.
         if mode == 8 {
@@ -426,6 +391,23 @@ impl Cpu {
                 AccessType::Load => return Err(Exception::LoadPageFault),
                 AccessType::Store => return Err(Exception::StoreAMOPageFault),
             },
+        }
+    }
+
+    pub fn load_csr(&self, addr: usize) -> u64 {
+        match addr {
+            SIE => self.csrs[MIE] & self.csrs[MIDELEG],
+            _ => self.csrs[addr],
+        }
+    }
+
+    pub fn store_csr(&mut self, addr: usize, value: u64) {
+        match addr {
+            SIE => {
+                self.csrs[MIE] =
+                    (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
+            }
+            _ => self.csrs[addr] = value,
         }
     }
 
@@ -911,28 +893,27 @@ impl Cpu {
                                 // - Sets CSRs[sstatus].SIE to CSRs[sstatus].SPIE.
                                 // - Sets CSRs[sstatus].SPIE to 1.
                                 // - Sets CSRs[sstatus].SPP to 0.
-                                self.pc = self.csrs.load(SEPC);
+                                self.pc = self.load_csr(SEPC);
                                 // When the SRET instruction is executed to return from the trap
                                 // handler, the privilege level is set to user mode if the SPP
                                 // bit is 0, or supervisor mode if the SPP bit is 1. The SPP bit
                                 // is the 8th of the SSTATUS csr.
-                                self.mode = match (self.csrs.load(SSTATUS) >> 8) & 1 {
+                                self.mode = match (self.load_csr(SSTATUS) >> 8) & 1 {
                                     1 => Mode::Supervisor,
                                     _ => Mode::User,
                                 };
                                 // The SPIE bit is the 5th and the SIE bit is the 1st of the
                                 // SSTATUS csr.
-                                self.csrs.store(
+                                self.store_csr(
                                     SSTATUS,
-                                    if ((self.csrs.load(SSTATUS) >> 5) & 1) == 1 {
-                                        self.csrs.load(SSTATUS) | (1 << 1)
+                                    if ((self.load_csr(SSTATUS) >> 5) & 1) == 1 {
+                                        self.load_csr(SSTATUS) | (1 << 1)
                                     } else {
-                                        self.csrs.load(SSTATUS) & !(1 << 1)
+                                        self.load_csr(SSTATUS) & !(1 << 1)
                                     },
                                 );
-                                self.csrs.store(SSTATUS, self.csrs.load(SSTATUS) | (1 << 5));
-                                self.csrs
-                                    .store(SSTATUS, self.csrs.load(SSTATUS) & !(1 << 8));
+                                self.store_csr(SSTATUS, self.load_csr(SSTATUS) | (1 << 5));
+                                self.store_csr(SSTATUS, self.load_csr(SSTATUS) & !(1 << 8));
                             }
                             (0x2, 0x18) => {
                                 // mret
@@ -943,26 +924,25 @@ impl Cpu {
                                 // - Sets CSRs[mstatus].MIE to CSRs[mstatus].MPIE.
                                 // - Sets CSRs[mstatus].MPIE to 1.
                                 // - Sets CSRs[mstatus].MPP to 0.
-                                self.pc = self.csrs.load(MEPC);
+                                self.pc = self.load_csr(MEPC);
                                 // MPP is two bits wide at [11..12] of the MSTATUS csr.
-                                self.mode = match (self.csrs.load(MSTATUS) >> 11) & 0b11 {
+                                self.mode = match (self.load_csr(MSTATUS) >> 11) & 0b11 {
                                     2 => Mode::Machine,
                                     1 => Mode::Supervisor,
                                     _ => Mode::User,
                                 };
                                 // The MPIE bit is the 7th and the MIE bit is the 3rd of the
                                 // MSTATUS csr.
-                                self.csrs.store(
+                                self.store_csr(
                                     MSTATUS,
-                                    if ((self.csrs.load(MSTATUS) >> 7) & 1) == 1 {
-                                        self.csrs.load(MSTATUS) | (1 << 3)
+                                    if ((self.load_csr(MSTATUS) >> 7) & 1) == 1 {
+                                        self.load_csr(MSTATUS) | (1 << 3)
                                     } else {
-                                        self.csrs.load(MSTATUS) & !(1 << 3)
+                                        self.load_csr(MSTATUS) & !(1 << 3)
                                     },
                                 );
-                                self.csrs.store(MSTATUS, self.csrs.load(MSTATUS) | (1 << 7));
-                                self.csrs
-                                    .store(MSTATUS, self.csrs.load(MSTATUS) & !(0b11 << 11));
+                                self.store_csr(MSTATUS, self.load_csr(MSTATUS) | (1 << 7));
+                                self.store_csr(MSTATUS, self.load_csr(MSTATUS) & !(0b11 << 11));
                             }
                             (_, 0x9) => {
                                 // sfence.vma
@@ -979,24 +959,24 @@ impl Cpu {
                     }
                     0x1 => {
                         // csrrw
-                        let t = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, self.regs[rs1]);
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, self.regs[rs1]);
                         self.regs[rd] = t;
 
                         self.update_paging(csr_addr);
                     }
                     0x2 => {
                         // csrrs
-                        let t = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, t | self.regs[rs1]);
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t | self.regs[rs1]);
                         self.regs[rd] = t;
 
                         self.update_paging(csr_addr);
                     }
                     0x3 => {
                         // csrrc
-                        let t = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, t & (!self.regs[rs1]));
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t & (!self.regs[rs1]));
                         self.regs[rd] = t;
 
                         self.update_paging(csr_addr);
@@ -1004,16 +984,16 @@ impl Cpu {
                     0x5 => {
                         // csrrwi
                         let zimm = rs1 as u64;
-                        self.regs[rd] = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, zimm);
+                        self.regs[rd] = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, zimm);
 
                         self.update_paging(csr_addr);
                     }
                     0x6 => {
                         // csrrsi
                         let zimm = rs1 as u64;
-                        let t = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, t | zimm);
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t | zimm);
                         self.regs[rd] = t;
 
                         self.update_paging(csr_addr);
@@ -1021,8 +1001,8 @@ impl Cpu {
                     0x7 => {
                         // csrrci
                         let zimm = rs1 as u64;
-                        let t = self.csrs.load(csr_addr);
-                        self.csrs.store(csr_addr, t & (!zimm));
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t & (!zimm));
                         self.regs[rd] = t;
 
                         self.update_paging(csr_addr);

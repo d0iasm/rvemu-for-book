@@ -5,7 +5,6 @@ use crate::clint::*;
 use crate::memory::*;
 use crate::plic::*;
 use crate::trap::*;
-use crate::uart::*;
 
 /// The address which the core-local interruptor (CLINT) starts. It contains the timer and
 /// generates per-hart software interrupts and timer
@@ -20,11 +19,6 @@ pub const PLIC_BASE: u64 = 0xc00_0000;
 /// The size of PLIC.
 pub const PLIC_SIZE: u64 = 0x4000000;
 
-/// The address which UART starts, same as QEMU virt machine.
-pub const UART_BASE: u64 = 0x1000_0000;
-/// The size of UART.
-pub const UART_SIZE: u64 = 0x100;
-
 /// The address which memory starts, same as QEMU virt machine.
 pub const MEMORY_BASE: u64 = 0x8000_0000;
 
@@ -37,7 +31,6 @@ pub trait Device {
 pub struct Bus {
     clint: Clint,
     plic: Plic,
-    uart: Uart,
     memory: Memory,
 }
 
@@ -47,7 +40,6 @@ impl Bus {
         Self {
             clint: Clint::new(),
             plic: Plic::new(),
-            uart: Uart::new(),
             memory: Memory::new(binary),
         }
     }
@@ -58,9 +50,6 @@ impl Bus {
         }
         if PLIC_BASE <= addr && addr < PLIC_BASE + PLIC_SIZE {
             return self.plic.load(addr, size);
-        }
-        if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
-            return self.uart.load(addr, size);
         }
         if MEMORY_BASE <= addr {
             return self.memory.load(addr, size);
@@ -75,9 +64,6 @@ impl Bus {
         }
         if PLIC_BASE <= addr && addr < PLIC_BASE + PLIC_SIZE {
             return self.plic.store(addr, size, value);
-        }
-        if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
-            return self.uart.store(addr, size, value);
         }
         if MEMORY_BASE <= addr {
             return self.memory.store(addr, size, value);

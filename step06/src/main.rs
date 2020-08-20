@@ -4,7 +4,6 @@ mod cpu;
 mod memory;
 mod plic;
 mod trap;
-mod uart;
 
 use std::env;
 use std::fs::File;

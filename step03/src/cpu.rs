@@ -28,6 +28,8 @@ pub const MEPC: usize = 0x341;
 pub const MCAUSE: usize = 0x342;
 /// Machine bad address or instruction.
 pub const MTVAL: usize = 0x343;
+/// Machine interrupt pending.
+pub const MIP: usize = 0x344;
 
 // Supervisor-level CSRs.
 /// Supervisor status register.
@@ -61,8 +63,6 @@ pub struct Cpu {
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
     pub csrs: [u64; 4096],
-    /// The size of executable binary.
-    pub codesize: u64,
 }
 
 impl Cpu {
@@ -72,15 +72,12 @@ impl Cpu {
         let mut regs = [0; 32];
         regs[2] = MEMORY_BASE + MEMORY_SIZE;
 
-        let codesize = binary.len() as u64;
-
         Self {
             regs,
             // The program counter starts from the start address of a memory.
             pc: MEMORY_BASE,
             bus: Bus::new(binary),
             csrs: [0; 4096],
-            codesize,
         }
     }
 
@@ -122,19 +119,57 @@ impl Cpu {
             "{}\n{}",
             format!(
                 "mstatus={:>#18x} mtvec={:>#18x} mepc={:>#18x} mcause={:>#18x}",
-                self.csrs[MSTATUS], self.csrs[MTVEC], self.csrs[MEPC], self.csrs[MCAUSE],
+                self.load_csr(MSTATUS),
+                self.load_csr(MTVEC),
+                self.load_csr(MEPC),
+                self.load_csr(MCAUSE),
             ),
             format!(
                 "sstatus={:>#18x} stvec={:>#18x} sepc={:>#18x} scause={:>#18x}",
-                self.csrs[SSTATUS], self.csrs[STVEC], self.csrs[SEPC], self.csrs[SCAUSE],
+                self.load_csr(SSTATUS),
+                self.load_csr(STVEC),
+                self.load_csr(SEPC),
+                self.load_csr(SCAUSE),
             ),
         );
         println!("{}", output);
     }
 
+    /// Load a value from a CSR.
+    pub fn load_csr(&self, addr: usize) -> u64 {
+        match addr {
+            SIE => self.csrs[MIE] & self.csrs[MIDELEG],
+            _ => self.csrs[addr],
+        }
+    }
+
+    /// Store a value to a CSR.
+    pub fn store_csr(&mut self, addr: usize, value: u64) {
+        match addr {
+            SIE => {
+                self.csrs[MIE] =
+                    (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
+            }
+            _ => self.csrs[addr] = value,
+        }
+    }
+
+    /// Load a value from a memory.
+    pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, ()> {
+        self.bus.load(addr, size)
+    }
+
+    /// Store a value to a memory.
+    pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+        self.bus.store(addr, size, value)
+    }
+
     /// Get an instruction from the memory.
-    pub fn fetch(&self) -> Result<u64, ()> {
-        return self.bus.load(self.pc, 32);
+    pub fn fetch(&mut self) -> Result<u64, ()> {
+        match self.bus.load(self.pc, 32) {
+            Ok(inst) => Ok(inst),
+            Err(_e) => Err(()),
+        }
     }
 
     /// Execute an instruction after decoding. Return true if an error happens, otherwise false.
@@ -157,40 +192,46 @@ impl Cpu {
                 match funct3 {
                     0x0 => {
                         // lb
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val as i8 as i64 as u64;
                     }
                     0x1 => {
                         // lh
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val as i16 as i64 as u64;
                     }
                     0x2 => {
                         // lw
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val as i32 as i64 as u64;
                     }
                     0x3 => {
                         // ld
-                        let val = self.bus.load(addr, 64)?;
+                        let val = self.load(addr, 64)?;
                         self.regs[rd] = val;
                     }
                     0x4 => {
                         // lbu
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val;
                     }
                     0x5 => {
                         // lhu
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val;
                     }
                     0x6 => {
                         // lwu
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x13 => {
@@ -269,10 +310,22 @@ impl Cpu {
                                 self.regs[rd] =
                                     (self.regs[rs1] as i32).wrapping_shr(shamt) as i64 as u64;
                             }
-                            _ => {}
+                            _ => {
+                                println!(
+                                    "not implemented yet: opcode {:#x} funct7 {:#x}",
+                                    opcode, funct7
+                                );
+                                return Err(());
+                            }
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x23 => {
@@ -280,10 +333,10 @@ impl Cpu {
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
                 match funct3 {
-                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
-                    0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
-                    0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
-                    0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
+                    0x0 => self.store(addr, 8, self.regs[rs2])?,  // sb
+                    0x1 => self.store(addr, 16, self.regs[rs2])?, // sh
+                    0x2 => self.store(addr, 32, self.regs[rs2])?, // sw
+                    0x3 => self.store(addr, 64, self.regs[rs2])?, // sd
                     _ => {}
                 }
             }
@@ -296,6 +349,10 @@ impl Cpu {
                     (0x0, 0x00) => {
                         // add
                         self.regs[rd] = self.regs[rs1].wrapping_add(self.regs[rs2]);
+                    }
+                    (0x0, 0x01) => {
+                        // mul
+                        self.regs[rd] = self.regs[rs1].wrapping_mul(self.regs[rs2]);
                     }
                     (0x0, 0x20) => {
                         // sub
@@ -341,7 +398,13 @@ impl Cpu {
                         // and
                         self.regs[rd] = self.regs[rs1] & self.regs[rs2];
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x37 => {
@@ -374,7 +437,13 @@ impl Cpu {
                         // sraw
                         self.regs[rd] = ((self.regs[rs1] as i32) >> (shamt as i32)) as u64;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x63 => {
@@ -421,11 +490,18 @@ impl Cpu {
                             self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x67 => {
                 // jalr
+                // Note: Don't add 4 because the pc already moved on.
                 let t = self.pc;
 
                 let imm = ((((inst & 0xfff00000) as i32) as i64) >> 20) as u64;
@@ -450,43 +526,49 @@ impl Cpu {
                 match funct3 {
                     0x1 => {
                         // csrrw
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = self.regs[rs1];
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, self.regs[rs1]);
                         self.regs[rd] = t;
                     }
                     0x2 => {
                         // csrrs
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t | self.regs[rs1];
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t | self.regs[rs1]);
                         self.regs[rd] = t;
                     }
                     0x3 => {
                         // csrrc
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t & (!self.regs[rs1]);
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t & (!self.regs[rs1]));
                         self.regs[rd] = t;
                     }
                     0x5 => {
                         // csrrwi
                         let zimm = rs1 as u64;
-                        self.regs[rd] = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = zimm;
+                        self.regs[rd] = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, zimm);
                     }
                     0x6 => {
                         // csrrsi
                         let zimm = rs1 as u64;
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t | zimm;
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t | zimm);
                         self.regs[rd] = t;
                     }
                     0x7 => {
                         // csrrci
                         let zimm = rs1 as u64;
-                        let t = self.csrs[csr_addr];
-                        self.csrs[csr_addr] = t & (!zimm);
+                        let t = self.load_csr(csr_addr);
+                        self.store_csr(csr_addr, t & (!zimm));
                         self.regs[rd] = t;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             _ => {

@@ -34,7 +34,7 @@ impl Device for Memory {
 }
 
 impl Memory {
-    /// Create a new memory object with default memory size.
+    /// Create a new `Memory` object with default memory size.
     pub fn new(binary: Vec<u8>) -> Memory {
         let mut memory = vec![0; MEMORY_SIZE as usize];
         memory.splice(..binary.len(), binary.iter().cloned());

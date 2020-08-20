@@ -1,0 +1,172 @@
+diff -x target -r step03/Cargo.lock step04/Cargo.lock
+4c4
+< name = "step3-rvemu-for-book"
+---
+> name = "step4-rvemu-for-book"
+diff -x target -r step03/Cargo.toml step04/Cargo.toml
+2c2
+< name = "step3-rvemu-for-book"
+---
+> name = "step4-rvemu-for-book"
+Only in step03: csr
+Only in step03: csr.bin
+Only in step03: csr.s
+Only in step03: Makefile
+diff -x target -r step03/src/cpu.rs step04/src/cpu.rs
+53a54,61
+> /// The privileged mode.
+> #[derive(Debug, PartialEq, PartialOrd, Eq, Copy, Clone)]
+> pub enum Mode {
+>     User = 0b00,
+>     Supervisor = 0b01,
+>     Machine = 0b11,
+> }
+> 
+60a69,70
+>     /// The current privilege mode.
+>     pub mode: Mode,
+78a89
+>             mode: Mode::Machine,
+342a354,392
+>             0x2f => {
+>                 // RV64A: "A" standard extension for atomic instructions
+>                 let funct5 = (funct7 & 0b1111100) >> 2;
+>                 let _aq = (funct7 & 0b0000010) >> 1; // acquire access
+>                 let _rl = funct7 & 0b0000001; // release access
+>                 match (funct3, funct5) {
+>                     (0x2, 0x00) => {
+>                         // amoadd.w
+>                         let t = self.load(self.regs[rs1], 32)?;
+>                         self.store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
+>                         self.regs[rd] = t;
+>                     }
+>                     (0x3, 0x00) => {
+>                         // amoadd.d
+>                         let t = self.load(self.regs[rs1], 64)?;
+>                         self.store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
+>                         self.regs[rd] = t;
+>                     }
+>                     (0x2, 0x01) => {
+>                         // amoswap.w
+>                         let t = self.load(self.regs[rs1], 32)?;
+>                         self.store(self.regs[rs1], 32, self.regs[rs2])?;
+>                         self.regs[rd] = t;
+>                     }
+>                     (0x3, 0x01) => {
+>                         // amoswap.d
+>                         let t = self.load(self.regs[rs1], 64)?;
+>                         self.store(self.regs[rs1], 64, self.regs[rs2])?;
+>                         self.regs[rd] = t;
+>                     }
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                             opcode, funct3, funct7
+>                         );
+>                         return Err(());
+>                     }
+>                 }
+>             }
+435a486,499
+>                     (0x5, 0x01) => {
+>                         // divu
+>                         self.regs[rd] = match self.regs[rs2] {
+>                             0 => {
+>                                 // TODO: Set DZ (Divide by Zero) in the FCSR csr flag to 1.
+>                                 0xffffffff_ffffffff
+>                             }
+>                             _ => {
+>                                 let dividend = self.regs[rs1];
+>                                 let divisor = self.regs[rs2];
+>                                 dividend.wrapping_div(divisor)
+>                             }
+>                         };
+>                     }
+439a504,514
+>                     (0x7, 0x01) => {
+>                         // remuw
+>                         self.regs[rd] = match self.regs[rs2] {
+>                             0 => self.regs[rs1],
+>                             _ => {
+>                                 let dividend = self.regs[rs1] as u32;
+>                                 let divisor = self.regs[rs2] as u32;
+>                                 dividend.wrapping_rem(divisor) as i32 as u64
+>                             }
+>                         };
+>                     }
+526a602,676
+>                     0x0 => {
+>                         match (rs2, funct7) {
+>                             (0x2, 0x8) => {
+>                                 // sret
+>                                 // The SRET instruction returns from a supervisor-mode exception
+>                                 // handler. It does the following operations:
+>                                 // - Sets the pc to CSRs[sepc].
+>                                 // - Sets the privilege mode to CSRs[sstatus].SPP.
+>                                 // - Sets CSRs[sstatus].SIE to CSRs[sstatus].SPIE.
+>                                 // - Sets CSRs[sstatus].SPIE to 1.
+>                                 // - Sets CSRs[sstatus].SPP to 0.
+>                                 self.pc = self.load_csr(SEPC);
+>                                 // When the SRET instruction is executed to return from the trap
+>                                 // handler, the privilege level is set to user mode if the SPP
+>                                 // bit is 0, or supervisor mode if the SPP bit is 1. The SPP bit
+>                                 // is the 8th of the SSTATUS csr.
+>                                 self.mode = match (self.load_csr(SSTATUS) >> 8) & 1 {
+>                                     1 => Mode::Supervisor,
+>                                     _ => Mode::User,
+>                                 };
+>                                 // The SPIE bit is the 5th and the SIE bit is the 1st of the
+>                                 // SSTATUS csr.
+>                                 self.store_csr(
+>                                     SSTATUS,
+>                                     if ((self.load_csr(SSTATUS) >> 5) & 1) == 1 {
+>                                         self.load_csr(SSTATUS) | (1 << 1)
+>                                     } else {
+>                                         self.load_csr(SSTATUS) & !(1 << 1)
+>                                     },
+>                                 );
+>                                 self.store_csr(SSTATUS, self.load_csr(SSTATUS) | (1 << 5));
+>                                 self.store_csr(SSTATUS, self.load_csr(SSTATUS) & !(1 << 8));
+>                             }
+>                             (0x2, 0x18) => {
+>                                 // mret
+>                                 // The MRET instruction returns from a machine-mode exception
+>                                 // handler. It does the following operations:
+>                                 // - Sets the pc to CSRs[mepc].
+>                                 // - Sets the privilege mode to CSRs[mstatus].MPP.
+>                                 // - Sets CSRs[mstatus].MIE to CSRs[mstatus].MPIE.
+>                                 // - Sets CSRs[mstatus].MPIE to 1.
+>                                 // - Sets CSRs[mstatus].MPP to 0.
+>                                 self.pc = self.load_csr(MEPC);
+>                                 // MPP is two bits wide at [11..12] of the MSTATUS csr.
+>                                 self.mode = match (self.load_csr(MSTATUS) >> 11) & 0b11 {
+>                                     2 => Mode::Machine,
+>                                     1 => Mode::Supervisor,
+>                                     _ => Mode::User,
+>                                 };
+>                                 // The MPIE bit is the 7th and the MIE bit is the 3rd of the
+>                                 // MSTATUS csr.
+>                                 self.store_csr(
+>                                     MSTATUS,
+>                                     if ((self.load_csr(MSTATUS) >> 7) & 1) == 1 {
+>                                         self.load_csr(MSTATUS) | (1 << 3)
+>                                     } else {
+>                                         self.load_csr(MSTATUS) & !(1 << 3)
+>                                     },
+>                                 );
+>                                 self.store_csr(MSTATUS, self.load_csr(MSTATUS) | (1 << 7));
+>                                 self.store_csr(MSTATUS, self.load_csr(MSTATUS) & !(0b11 << 11));
+>                             }
+>                             (_, 0x9) => {
+>                                 // sfence.vma
+>                                 // Do nothing.
+>                             }
+>                             _ => {
+>                                 println!(
+>                                     "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                                     opcode, funct3, funct7
+>                                 );
+>                                 return Err(());
+>                             }
+>                         }
+>                     }

@@ -104,7 +104,7 @@ impl Uart {
                 uart[(UART_LSR - UART_BASE) as usize] &= !UART_LSR_RX;
                 uart[(UART_RHR - UART_BASE) as usize] as u64
             }
-            _ => uart[(addr- UART_BASE) as usize] as u64,
+            _ => uart[(addr - UART_BASE) as usize] as u64,
         }
     }
 
@@ -117,7 +117,7 @@ impl Uart {
                 io::stdout().flush().expect("failed to flush stdout");
             }
             _ => {
-                uart[(addr- UART_BASE) as usize] = value as u8;
+                uart[(addr - UART_BASE) as usize] = value as u8;
             }
         }
     }

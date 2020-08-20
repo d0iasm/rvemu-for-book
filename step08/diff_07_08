@@ -1,0 +1,208 @@
+diff -x target -r step07/Cargo.lock step08/Cargo.lock
+4c4
+< name = "step7-rvemu-for-book"
+---
+> name = "step8-rvemu-for-book"
+diff -x target -r step07/Cargo.toml step08/Cargo.toml
+2c2
+< name = "step7-rvemu-for-book"
+---
+> name = "step8-rvemu-for-book"
+Only in step07: echoback
+Only in step07: echoback.bin
+Only in step07: echoback.c
+Only in step07: echoback.s
+Only in step07: helloworld
+Only in step07: helloworld.bin
+Only in step07: helloworld.c
+Only in step07: helloworld.s
+Only in step07: Makefile
+diff -x target -r step07/src/cpu.rs step08/src/cpu.rs
+6a7
+> use crate::plic::*;
+7a9
+> use crate::uart::*;
+34a37,44
+> // MIP fields.
+> pub const MIP_SSIP: u64 = 1 << 1;
+> pub const MIP_MSIP: u64 = 1 << 3;
+> pub const MIP_STIP: u64 = 1 << 5;
+> pub const MIP_MTIP: u64 = 1 << 7;
+> pub const MIP_SEIP: u64 = 1 << 9;
+> pub const MIP_MEIP: u64 = 1 << 11;
+> 
+147a158,229
+>     }
+> 
+>     pub fn check_pending_interrupt(&mut self) -> Option<Interrupt> {
+>         // 3.1.6.1 Privilege and Global Interrupt-Enable Stack in mstatus register
+>         // "When a hart is executing in privilege mode x, interrupts are globally enabled when x
+>         // IE=1 and globally disabled when x IE=0."
+>         match self.mode {
+>             Mode::Machine => {
+>                 // Check if the MIE bit is enabled.
+>                 if (self.load_csr(MSTATUS) >> 3) & 1 == 0 {
+>                     return None;
+>                 }
+>             }
+>             Mode::Supervisor => {
+>                 // Check if the SIE bit is enabled.
+>                 if (self.load_csr(SSTATUS) >> 1) & 1 == 0 {
+>                     return None;
+>                 }
+>             }
+>             _ => {}
+>         }
+> 
+>         // Check external interrupt for uart.
+>         let irq;
+>         if self.bus.uart.is_interrupting() {
+>             irq = UART_IRQ;
+>         } else {
+>             irq = 0;
+>         }
+> 
+>         if irq != 0 {
+>             self.bus
+>                 .store(PLIC_SCLAIM, 32, irq)
+>                 .expect("failed to write an IRQ to the PLIC_SCLAIM");
+>             self.store_csr(MIP, self.load_csr(MIP) | MIP_SEIP);
+>         }
+> 
+>         // "An interrupt i will be taken if bit i is set in both mip and mie, and if interrupts are globally enabled.
+>         // By default, M-mode interrupts are globally enabled if the hart’s current privilege mode is less than
+>         // M, or if the current privilege mode is M and the MIE bit in the mstatus register is set. If bit i
+>         // in mideleg is set, however, interrupts are considered to be globally enabled if the hart’s current
+>         // privilege mode equals the delegated privilege mode (S or U) and that mode’s interrupt enable bit
+>         // (SIE or UIE in mstatus) is set, or if the current privilege mode is less than the delegated privilege
+>         // mode."
+> 
+>         let pending = self.load_csr(MIE) & self.load_csr(MIP);
+> 
+>         if (pending & MIP_MEIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_MEIP);
+>             return Some(Interrupt::MachineExternalInterrupt);
+>         }
+>         if (pending & MIP_MSIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_MSIP);
+>             return Some(Interrupt::MachineSoftwareInterrupt);
+>         }
+>         if (pending & MIP_MTIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_MTIP);
+>             return Some(Interrupt::MachineTimerInterrupt);
+>         }
+>         if (pending & MIP_SEIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_SEIP);
+>             return Some(Interrupt::SupervisorExternalInterrupt);
+>         }
+>         if (pending & MIP_SSIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_SSIP);
+>             return Some(Interrupt::SupervisorSoftwareInterrupt);
+>         }
+>         if (pending & MIP_STIP) != 0 {
+>             self.store_csr(MIP, self.load_csr(MIP) & !MIP_STIP);
+>             return Some(Interrupt::SupervisorTimerInterrupt);
+>         }
+>         None
+diff -x target -r step07/src/main.rs step08/src/main.rs
+56,58c56,58
+<         // This is a workaround for avoiding an infinite loop.
+<         if cpu.pc == 0 {
+<             break;
+---
+>         match cpu.check_pending_interrupt() {
+>             Some(interrupt) => interrupt.take_trap(&mut cpu),
+>             None => {}
+diff -x target -r step07/src/trap.rs step08/src/trap.rs
+26a27,42
+> /// All kinds of interrupts, an external asynchronous event that may
+> /// cause a hardware thread to experience an unexpected transfer of
+> /// control.
+> #[derive(Debug)]
+> pub enum Interrupt {
+>     UserSoftwareInterrupt,
+>     SupervisorSoftwareInterrupt,
+>     MachineSoftwareInterrupt,
+>     UserTimerInterrupt,
+>     SupervisorTimerInterrupt,
+>     MachineTimerInterrupt,
+>     UserExternalInterrupt,
+>     SupervisorExternalInterrupt,
+>     MachineExternalInterrupt,
+> }
+> 
+31a48,49
+>     /// Trap handler.
+>     fn take_trap(&self, cpu: &mut Cpu);
+33c51
+<     fn take_trap(&self, cpu: &mut Cpu) {
+---
+>     fn take_trap_helper(&self, cpu: &mut Cpu, is_interrupt: bool) {
+37c55,59
+<         let cause = self.exception_code();
+---
+>         let mut cause = self.exception_code();
+>         // Set an interrupt bit if a trap is an interrupt.
+>         if is_interrupt {
+>             cause = (1 << 63) | cause;
+>         }
+45c67,75
+<             cpu.pc = cpu.load_csr(STVEC) & !1;
+---
+>             if is_interrupt {
+>                 let vector = match cpu.load_csr(STVEC) & 1 {
+>                     1 => 4 * cause, // vectored mode
+>                     _ => 0,         // direct mode
+>                 };
+>                 cpu.pc = (cpu.load_csr(STVEC) & !1) + vector;
+>             } else {
+>                 cpu.pc = cpu.load_csr(STVEC) & !1;
+>             }
+96c126,134
+<             cpu.pc = cpu.load_csr(MTVEC) & !1;
+---
+>             if is_interrupt {
+>                 let vector = match cpu.load_csr(MTVEC) & 1 {
+>                     1 => 4 * cause, // vectored mode
+>                     _ => 0,         // direct mode
+>                 };
+>                 cpu.pc = (cpu.load_csr(MTVEC) & !1) + vector;
+>             } else {
+>                 cpu.pc = cpu.load_csr(MTVEC) & !1;
+>             }
+159a198,221
+>     }
+> 
+>     fn take_trap(&self, cpu: &mut Cpu) {
+>         self.take_trap_helper(cpu, false);
+>     }
+> }
+> 
+> impl Trap for Interrupt {
+>     fn exception_code(&self) -> u64 {
+>         match self {
+>             Interrupt::UserSoftwareInterrupt => 0,
+>             Interrupt::SupervisorSoftwareInterrupt => 1,
+>             Interrupt::MachineSoftwareInterrupt => 3,
+>             Interrupt::UserTimerInterrupt => 4,
+>             Interrupt::SupervisorTimerInterrupt => 5,
+>             Interrupt::MachineTimerInterrupt => 7,
+>             Interrupt::UserExternalInterrupt => 8,
+>             Interrupt::SupervisorExternalInterrupt => 9,
+>             Interrupt::MachineExternalInterrupt => 11,
+>         }
+>     }
+> 
+>     fn take_trap(&self, cpu: &mut Cpu) {
+>         self.take_trap_helper(cpu, true);
+diff -x target -r step07/src/uart.rs step08/src/uart.rs
+17a18,20
+> /// The interrupt request of UART.
+> pub const UART_IRQ: u64 = 10;
+> 
+95a99,103
+>     }
+> 
+>     /// Return true if an interrupt is pending. Clear the interrupting flag by swapping a value.
+>     pub fn is_interrupting(&self) -> bool {
+>         self.interrupting.swap(false, Ordering::Acquire)

@@ -30,21 +30,30 @@ impl Cpu {
     }
 
     /// Print values in all registers (x0-x31).
-    fn dump_registers(&self) {
+    pub fn dump_registers(&self) {
         let mut output = String::from("");
+        let abi = [
+            "zero", " ra ", " sp ", " gp ", " tp ", " t0 ", " t1 ", " t2 ", " s0 ", " s1 ", " a0 ",
+            " a1 ", " a2 ", " a3 ", " a4 ", " a5 ", " a6 ", " a7 ", " s2 ", " s3 ", " s4 ", " s5 ",
+            " s6 ", " s7 ", " s8 ", " s9 ", " s10", " s11", " t3 ", " t4 ", " t5 ", " t6 ",
+        ];
         for i in (0..32).step_by(4) {
             output = format!(
                 "{}\n{}",
                 output,
                 format!(
-                    "x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x}",
+                    "x{:02}({})={:>#18x} x{:02}({})={:>#18x} x{:02}({})={:>#18x} x{:02}({})={:>#18x}",
                     i,
+                    abi[i],
                     self.regs[i],
                     i + 1,
+                    abi[i + 1],
                     self.regs[i + 1],
                     i + 2,
+                    abi[i + 2],
                     self.regs[i + 2],
                     i + 3,
+                    abi[i + 3],
                     self.regs[i + 3],
                 )
             );
@@ -92,7 +101,7 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
-        panic!("Usage: rvemu-simple <filename>");
+        panic!("Usage: rvemu-for-book <filename>");
     }
     let mut file = File::open(&args[1])?;
     let mut binary = Vec::new();

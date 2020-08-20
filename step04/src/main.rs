@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-use crate::bus::*;
 use crate::cpu::*;
 
 fn main() -> io::Result<()> {
@@ -22,7 +21,7 @@ fn main() -> io::Result<()> {
 
     let mut cpu = Cpu::new(binary);
 
-    while cpu.pc - MEMORY_BASE < cpu.codesize {
+    loop {
         // 1. Fetch.
         let inst = match cpu.fetch() {
             // Break the loop if an error occurs.

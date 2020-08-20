@@ -1,0 +1,178 @@
+diff -x target -r step04/Cargo.lock step05/Cargo.lock
+4c4
+< name = "step4-rvemu-for-book"
+---
+> name = "step5-rvemu-for-book"
+diff -x target -r step04/Cargo.toml step05/Cargo.toml
+2c2
+< name = "step4-rvemu-for-book"
+---
+> name = "step5-rvemu-for-book"
+Only in step05: invalid.bin
+diff -x target -r step04/src/bus.rs step05/src/bus.rs
+4a5
+> use crate::trap::*;
+10,11c11,12
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, ()>;
+<     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()>;
+---
+>     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception>;
+>     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception>;
+27c28
+<     pub fn load(&self, addr: u64, size: u64) -> Result<u64, ()> {
+---
+>     pub fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+31c32
+<         Err(())
+---
+>         Err(Exception::LoadAccessFault)
+33c34,35
+<     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+---
+> 
+>     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+37c39
+<         Err(())
+---
+>         Err(Exception::StoreAMOAccessFault)
+diff -x target -r step04/src/cpu.rs step05/src/cpu.rs
+6a7
+> use crate::trap::*;
+169c170
+<     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, ()> {
+---
+>     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+174c175
+<     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+---
+>     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+179c180
+<     pub fn fetch(&mut self) -> Result<u64, ()> {
+---
+>     pub fn fetch(&mut self) -> Result<u64, Exception> {
+182c183
+<             Err(_e) => Err(()),
+---
+>             Err(_e) => Err(Exception::InstructionAccessFault),
+187c188
+<     pub fn execute(&mut self, inst: u64) -> Result<(), ()> {
+---
+>     pub fn execute(&mut self, inst: u64) -> Result<(), Exception> {
+244c245,259
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+>                 }
+>             }
+>             0x0f => {
+>                 // A fence instruction does nothing because this emulator executes an
+>                 // instruction sequentially on a single thread.
+>                 match funct3 {
+>                     0x0 => {} // fence
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+329c344
+<                                 return Err(());
+---
+>                                 return Err(Exception::IllegalInstruction);
+338c353
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+389c404
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+456c471
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+520c535
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+573c588
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+603a619,640
+>                             (0x0, 0x0) => {
+>                                 // ecall
+>                                 // Makes a request of the execution environment by raising an
+>                                 // environment call exception.
+>                                 match self.mode {
+>                                     Mode::User => {
+>                                         return Err(Exception::EnvironmentCallFromUMode);
+>                                     }
+>                                     Mode::Supervisor => {
+>                                         return Err(Exception::EnvironmentCallFromSMode);
+>                                     }
+>                                     Mode::Machine => {
+>                                         return Err(Exception::EnvironmentCallFromMMode);
+>                                     }
+>                                 }
+>                             }
+>                             (0x1, 0x0) => {
+>                                 // ebreak
+>                                 // Makes a request of the debugger bu raising a Breakpoint
+>                                 // exception.
+>                                 return Err(Exception::Breakpoint);
+>                             }
+673c710
+<                                 return Err(());
+---
+>                                 return Err(Exception::IllegalInstruction);
+720c757
+<                         return Err(());
+---
+>                         return Err(Exception::IllegalInstruction);
+726c763
+<                 return Err(());
+---
+>                 return Err(Exception::IllegalInstruction);
+diff -x target -r step04/src/main.rs step05/src/main.rs
+3a4
+> mod trap;
+10a12
+> use crate::trap::*;
+29c31,35
+<             Err(_) => break,
+---
+>             Err(exception) => {
+>                 exception.take_trap(&mut cpu);
+>                 println!("exception: {:?}", exception);
+>                 break;
+>             }
+40c46,50
+<             Err(_) => break,
+---
+>             Err(exception) => {
+>                 exception.take_trap(&mut cpu);
+>                 println!("exception: {:?}", exception);
+>                 break;
+>             }
+diff -x target -r step04/src/memory.rs step05/src/memory.rs
+3a4
+> use crate::trap::*;
+15c16
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, ()> {
+---
+>     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+21c22
+<             _ => Err(()),
+---
+>             _ => Err(Exception::LoadAccessFault),
+25c26
+<     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+---
+>     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+31c32
+<             _ => Err(()),
+---
+>             _ => Err(Exception::StoreAMOAccessFault),
+Only in step05/src: trap.rs

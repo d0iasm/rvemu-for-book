@@ -3,7 +3,7 @@
 
 use crate::memory::*;
 
-/// The address which memory starts.
+/// The address which memory starts, same as QEMU virt machine.
 pub const MEMORY_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
@@ -13,7 +13,7 @@ pub trait Device {
 
 /// The system bus.
 pub struct Bus {
-    pub memory: Memory,
+    memory: Memory,
 }
 
 impl Bus {

@@ -1,0 +1,490 @@
+diff -x target -r step04/Cargo.lock step05/Cargo.lock
+4c4
+< name = "step4-rvemu-for-book"
+---
+> name = "step5-rvemu-for-book"
+diff -x target -r step04/Cargo.toml step05/Cargo.toml
+2c2
+< name = "step4-rvemu-for-book"
+---
+> name = "step5-rvemu-for-book"
+Only in step04: diff
+diff -x target -r step04/src/bus.rs step05/src/bus.rs
+4a5
+> use crate::trap::*;
+6c7
+< /// The address which memory starts.
+---
+> /// The address which memory starts, same as QEMU virt machine.
+10,11c11,12
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, ()>;
+<     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()>;
+---
+>     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception>;
+>     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception>;
+16c17
+<     pub memory: Memory,
+---
+>     memory: Memory,
+27c28
+<     pub fn load(&self, addr: u64, size: u64) -> Result<u64, ()> {
+---
+>     pub fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+31c32
+<         Err(())
+---
+>         Err(Exception::LoadAccessFault)
+33c34,35
+<     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+---
+> 
+>     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+37c39
+<         Err(())
+---
+>         Err(Exception::StoreAMOAccessFault)
+diff -x target -r step04/src/cpu.rs step05/src/cpu.rs
+6a7
+> use crate::trap::*;
+30a32,33
+> /// Machine interrupt pending.
+> pub const MIP: usize = 0x344;
+74,75d76
+<     /// The size of executable binary.
+<     pub codesize: u64,
+85,86d85
+<         let codesize = binary.len() as u64;
+< 
+94d92
+<             codesize,
+136c134,137
+<                 self.csrs[MSTATUS], self.csrs[MTVEC], self.csrs[MEPC], self.csrs[MCAUSE],
+---
+>                 self.load_csr(MSTATUS),
+>                 self.load_csr(MTVEC),
+>                 self.load_csr(MEPC),
+>                 self.load_csr(MCAUSE),
+140c141,144
+<                 self.csrs[SSTATUS], self.csrs[STVEC], self.csrs[SEPC], self.csrs[SCAUSE],
+---
+>                 self.load_csr(SSTATUS),
+>                 self.load_csr(STVEC),
+>                 self.load_csr(SEPC),
+>                 self.load_csr(SCAUSE),
+145a150,178
+>     /// Load a value from a CSR.
+>     pub fn load_csr(&self, addr: usize) -> u64 {
+>         match addr {
+>             SIE => self.csrs[MIE] & self.csrs[MIDELEG],
+>             _ => self.csrs[addr],
+>         }
+>     }
+> 
+>     /// Store a value to a CSR.
+>     pub fn store_csr(&mut self, addr: usize, value: u64) {
+>         match addr {
+>             SIE => {
+>                 self.csrs[MIE] =
+>                     (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
+>             }
+>             _ => self.csrs[addr] = value,
+>         }
+>     }
+> 
+>     /// Load a value from a memory.
+>     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+>         self.bus.load(addr, size)
+>     }
+> 
+>     /// Store a value to a memory.
+>     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+>         self.bus.store(addr, size, value)
+>     }
+> 
+147,148c180,184
+<     pub fn fetch(&self) -> Result<u64, ()> {
+<         return self.bus.load(self.pc, 32);
+---
+>     pub fn fetch(&mut self) -> Result<u64, Exception> {
+>         match self.bus.load(self.pc, 32) {
+>             Ok(inst) => Ok(inst),
+>             Err(_e) => Err(Exception::InstructionAccessFault),
+>         }
+152c188
+<     pub fn execute(&mut self, inst: u64) -> Result<(), ()> {
+---
+>     pub fn execute(&mut self, inst: u64) -> Result<(), Exception> {
+171c207
+<                         let val = self.bus.load(addr, 8)?;
+---
+>                         let val = self.load(addr, 8)?;
+176c212
+<                         let val = self.bus.load(addr, 16)?;
+---
+>                         let val = self.load(addr, 16)?;
+181c217
+<                         let val = self.bus.load(addr, 32)?;
+---
+>                         let val = self.load(addr, 32)?;
+186c222
+<                         let val = self.bus.load(addr, 64)?;
+---
+>                         let val = self.load(addr, 64)?;
+191c227
+<                         let val = self.bus.load(addr, 8)?;
+---
+>                         let val = self.load(addr, 8)?;
+196c232
+<                         let val = self.bus.load(addr, 16)?;
+---
+>                         let val = self.load(addr, 16)?;
+201c237
+<                         let val = self.bus.load(addr, 32)?;
+---
+>                         let val = self.load(addr, 32)?;
+204c240,260
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+>                 }
+>             }
+>             0x0f => {
+>                 // A fence instruction does nothing because this emulator executes an
+>                 // instruction sequentially on a single thread.
+>                 match funct3 {
+>                     0x0 => {} // fence
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+283c339,345
+<                             _ => {}
+---
+>                             _ => {
+>                                 println!(
+>                                     "not implemented yet: opcode {:#x} funct7 {:#x}",
+>                                     opcode, funct7
+>                                 );
+>                                 return Err(Exception::IllegalInstruction);
+>                             }
+286c348,354
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+294,297c362,365
+<                     0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
+<                     0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
+<                     0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
+<                     0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
+---
+>                     0x0 => self.store(addr, 8, self.regs[rs2])?,  // sb
+>                     0x1 => self.store(addr, 16, self.regs[rs2])?, // sh
+>                     0x2 => self.store(addr, 32, self.regs[rs2])?, // sw
+>                     0x3 => self.store(addr, 64, self.regs[rs2])?, // sd
+302,303c370
+<                 // RV64A: “A” standard extension for atomic
+<                 // instructions
+---
+>                 // RV64A: "A" standard extension for atomic instructions
+310,312c377,378
+<                         let t = self.bus.load(self.regs[rs1], 32)?;
+<                         self.bus
+<                             .store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
+---
+>                         let t = self.load(self.regs[rs1], 32)?;
+>                         self.store(self.regs[rs1], 32, t.wrapping_add(self.regs[rs2]))?;
+317,319c383,384
+<                         let t = self.bus.load(self.regs[rs1], 64)?;
+<                         self.bus
+<                             .store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
+---
+>                         let t = self.load(self.regs[rs1], 64)?;
+>                         self.store(self.regs[rs1], 64, t.wrapping_add(self.regs[rs2]))?;
+324,325c389,390
+<                         let t = self.bus.load(self.regs[rs1], 32)?;
+<                         self.bus.store(self.regs[rs1], 32, self.regs[rs2])?;
+---
+>                         let t = self.load(self.regs[rs1], 32)?;
+>                         self.store(self.regs[rs1], 32, self.regs[rs2])?;
+330,331c395,396
+<                         let t = self.bus.load(self.regs[rs1], 64)?;
+<                         self.bus.store(self.regs[rs1], 64, self.regs[rs2])?;
+---
+>                         let t = self.load(self.regs[rs1], 64)?;
+>                         self.store(self.regs[rs1], 64, self.regs[rs2])?;
+334c399,405
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                             opcode, funct3, funct7
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+346a418,421
+>                     (0x0, 0x01) => {
+>                         // mul
+>                         self.regs[rd] = self.regs[rs1].wrapping_mul(self.regs[rs2]);
+>                     }
+391c466,472
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                             opcode, funct3, funct7
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+419a501,514
+>                     (0x5, 0x01) => {
+>                         // divu
+>                         self.regs[rd] = match self.regs[rs2] {
+>                             0 => {
+>                                 // TODO: Set DZ (Divide by Zero) in the FCSR csr flag to 1.
+>                                 0xffffffff_ffffffff
+>                             }
+>                             _ => {
+>                                 let dividend = self.regs[rs1];
+>                                 let divisor = self.regs[rs2];
+>                                 dividend.wrapping_div(divisor)
+>                             }
+>                         };
+>                     }
+424c519,536
+<                     _ => {}
+---
+>                     (0x7, 0x01) => {
+>                         // remuw
+>                         self.regs[rd] = match self.regs[rs2] {
+>                             0 => self.regs[rs1],
+>                             _ => {
+>                                 let dividend = self.regs[rs1] as u32;
+>                                 let divisor = self.regs[rs2] as u32;
+>                                 dividend.wrapping_rem(divisor) as i32 as u64
+>                             }
+>                         };
+>                     }
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                             opcode, funct3, funct7
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+471c583,589
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+475a594
+>                 // Note: Don't add 4 because the pc already moved on.
+499a619,640
+>                             (0x0, 0x0) => {
+>                                 // ecall
+>                                 // Makes a request of the execution environment by raising an
+>                                 // environment call exception.
+>                                 match self.mode {
+>                                     Mode::User => {
+>                                         return Err(Exception::EnvironmentCallFromUMode);
+>                                     }
+>                                     Mode::Supervisor => {
+>                                         return Err(Exception::EnvironmentCallFromSMode);
+>                                     }
+>                                     Mode::Machine => {
+>                                         return Err(Exception::EnvironmentCallFromMMode);
+>                                     }
+>                                 }
+>                             }
+>                             (0x1, 0x0) => {
+>                                 // ebreak
+>                                 // Makes a request of the debugger bu raising a Breakpoint
+>                                 // exception.
+>                                 return Err(Exception::Breakpoint);
+>                             }
+509c650
+<                                 self.pc = self.csrs[SEPC];
+---
+>                                 self.pc = self.load_csr(SEPC);
+514c655
+<                                 self.mode = match (self.csrs[SSTATUS] >> 8) & 1 {
+---
+>                                 self.mode = match (self.load_csr(SSTATUS) >> 8) & 1 {
+520,526c661,670
+<                                 self.csrs[SSTATUS] = if ((self.csrs[SSTATUS] >> 5) & 1) == 1 {
+<                                     self.csrs[SSTATUS] | (1 << 1)
+<                                 } else {
+<                                     self.csrs[SSTATUS] & !(1 << 1)
+<                                 };
+<                                 self.csrs[SSTATUS] = self.csrs[SSTATUS] | (1 << 5);
+<                                 self.csrs[SSTATUS] = self.csrs[SSTATUS] & !(1 << 8);
+---
+>                                 self.store_csr(
+>                                     SSTATUS,
+>                                     if ((self.load_csr(SSTATUS) >> 5) & 1) == 1 {
+>                                         self.load_csr(SSTATUS) | (1 << 1)
+>                                     } else {
+>                                         self.load_csr(SSTATUS) & !(1 << 1)
+>                                     },
+>                                 );
+>                                 self.store_csr(SSTATUS, self.load_csr(SSTATUS) | (1 << 5));
+>                                 self.store_csr(SSTATUS, self.load_csr(SSTATUS) & !(1 << 8));
+537c681
+<                                 self.pc = self.csrs[MEPC];
+---
+>                                 self.pc = self.load_csr(MEPC);
+539c683
+<                                 self.mode = match (self.csrs[MSTATUS] >> 11) & 0b11 {
+---
+>                                 self.mode = match (self.load_csr(MSTATUS) >> 11) & 0b11 {
+546,552c690,699
+<                                 self.csrs[MSTATUS] = if ((self.csrs[MSTATUS] >> 7) & 1) == 1 {
+<                                     self.csrs[MSTATUS] | (1 << 3)
+<                                 } else {
+<                                     self.csrs[MSTATUS] & !(1 << 3)
+<                                 };
+<                                 self.csrs[MSTATUS] = self.csrs[MSTATUS] | (1 << 7);
+<                                 self.csrs[MSTATUS] = self.csrs[MSTATUS] & !(0b11 << 11);
+---
+>                                 self.store_csr(
+>                                     MSTATUS,
+>                                     if ((self.load_csr(MSTATUS) >> 7) & 1) == 1 {
+>                                         self.load_csr(MSTATUS) | (1 << 3)
+>                                     } else {
+>                                         self.load_csr(MSTATUS) & !(1 << 3)
+>                                     },
+>                                 );
+>                                 self.store_csr(MSTATUS, self.load_csr(MSTATUS) | (1 << 7));
+>                                 self.store_csr(MSTATUS, self.load_csr(MSTATUS) & !(0b11 << 11));
+558c705,711
+<                             _ => {}
+---
+>                             _ => {
+>                                 println!(
+>                                     "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+>                                     opcode, funct3, funct7
+>                                 );
+>                                 return Err(Exception::IllegalInstruction);
+>                             }
+563,564c716,717
+<                         let t = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = self.regs[rs1];
+---
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, self.regs[rs1]);
+569,570c722,723
+<                         let t = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = t | self.regs[rs1];
+---
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t | self.regs[rs1]);
+575,576c728,729
+<                         let t = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = t & (!self.regs[rs1]);
+---
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t & (!self.regs[rs1]));
+582,583c735,736
+<                         self.regs[rd] = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = zimm;
+---
+>                         self.regs[rd] = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, zimm);
+588,589c741,742
+<                         let t = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = t | zimm;
+---
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t | zimm);
+595,596c748,749
+<                         let t = self.csrs[csr_addr];
+<                         self.csrs[csr_addr] = t & (!zimm);
+---
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t & (!zimm));
+599c752,758
+<                     _ => {}
+---
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(Exception::IllegalInstruction);
+>                     }
+604c763
+<                 return Err(());
+---
+>                 return Err(Exception::IllegalInstruction);
+diff -x target -r step04/src/main.rs step05/src/main.rs
+3a4
+> mod trap;
+10d10
+< use crate::bus::*;
+11a12
+> use crate::trap::*;
+25c26
+<     while cpu.pc - MEMORY_BASE < cpu.codesize {
+---
+>     loop {
+30c31,35
+<             Err(_) => break,
+---
+>             Err(exception) => {
+>                 exception.take_trap(&mut cpu);
+>                 println!("exception: {:?}", exception);
+>                 break;
+>             }
+41c46,50
+<             Err(_) => break,
+---
+>             Err(exception) => {
+>                 exception.take_trap(&mut cpu);
+>                 println!("exception: {:?}", exception);
+>                 break;
+>             }
+diff -x target -r step04/src/memory.rs step05/src/memory.rs
+3a4
+> use crate::trap::*;
+15c16
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, ()> {
+---
+>     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+21c22
+<             _ => Err(()),
+---
+>             _ => Err(Exception::LoadAccessFault),
+25c26
+<     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+---
+>     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
+31c32
+<             _ => Err(()),
+---
+>             _ => Err(Exception::StoreAMOAccessFault),
+37c38
+<     /// Create a new memory object with default memory size.
+---
+>     /// Create a new `Memory` object with default memory size.
+Only in step05/src: trap.rs

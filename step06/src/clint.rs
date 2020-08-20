@@ -19,7 +19,7 @@ pub struct Clint {
 }
 
 impl Device for Clint {
-    fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+    fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
         match size {
             64 => Ok(self.load64(addr)),
             _ => Err(Exception::LoadAccessFault),

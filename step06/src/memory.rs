@@ -13,7 +13,7 @@ pub struct Memory {
 }
 
 impl Device for Memory {
-    fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+    fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
         match size {
             8 => Ok(self.load8(addr)),
             16 => Ok(self.load16(addr)),

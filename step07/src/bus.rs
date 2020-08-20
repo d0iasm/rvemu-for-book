@@ -37,7 +37,7 @@ pub trait Device {
 pub struct Bus {
     clint: Clint,
     plic: Plic,
-    pub uart: Uart,
+    uart: Uart,
     memory: Memory,
 }
 

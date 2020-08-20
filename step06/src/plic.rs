@@ -24,7 +24,7 @@ pub struct Plic {
 }
 
 impl Device for Plic {
-    fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+    fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
         match size {
             32 => Ok(self.load32(addr)),
             _ => Err(Exception::LoadAccessFault),

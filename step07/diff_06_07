@@ -1,0 +1,68 @@
+diff -x target -r step06/Cargo.lock step07/Cargo.lock
+4c4
+< name = "step6-rvemu-for-book"
+---
+> name = "step7-rvemu-for-book"
+diff -x target -r step06/Cargo.toml step07/Cargo.toml
+2c2
+< name = "step6-rvemu-for-book"
+---
+> name = "step7-rvemu-for-book"
+Only in step07: diff_06_07
+Only in step07: echoback
+Only in step07: echoback.bin
+Only in step07: echoback.c
+Only in step07: echoback.s
+Only in step07: helloworld
+Only in step07: helloworld.bin
+Only in step07: helloworld.c
+Only in step07: helloworld.s
+Only in step07: Makefile
+diff -x target -r step06/src/bus.rs step07/src/bus.rs
+7a8
+> use crate::uart::*;
+21a23,27
+> /// The address which UART starts, same as QEMU virt machine.
+> pub const UART_BASE: u64 = 0x1000_0000;
+> /// The size of UART.
+> pub const UART_SIZE: u64 = 0x100;
+> 
+26c32
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception>;
+---
+>     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception>;
+33a40
+>     uart: Uart,
+42a50
+>             uart: Uart::new(),
+47c55
+<     pub fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+---
+>     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+53a62,64
+>         if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
+>             return self.uart.load(addr, size);
+>         }
+65a77,79
+>         }
+>         if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
+>             return self.uart.store(addr, size, value);
+diff -x target -r step06/src/clint.rs step07/src/clint.rs
+22c22
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+---
+>     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+diff -x target -r step06/src/main.rs step07/src/main.rs
+6a7
+> mod uart;
+diff -x target -r step06/src/memory.rs step07/src/memory.rs
+16c16
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+---
+>     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+diff -x target -r step06/src/plic.rs step07/src/plic.rs
+27c27
+<     fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
+---
+>     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+Only in step07/src: uart.rs

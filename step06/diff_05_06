@@ -1,0 +1,56 @@
+diff -x target -r step05/Cargo.lock step06/Cargo.lock
+4c4
+< name = "step5-rvemu-for-book"
+---
+> name = "step6-rvemu-for-book"
+diff -x target -r step05/Cargo.toml step06/Cargo.toml
+2c2
+< name = "step5-rvemu-for-book"
+---
+> name = "step6-rvemu-for-book"
+diff -x target -r step05/src/bus.rs step06/src/bus.rs
+3a4
+> use crate::clint::*;
+4a6
+> use crate::plic::*;
+6a9,21
+> /// The address which the core-local interruptor (CLINT) starts. It contains the timer and
+> /// generates per-hart software interrupts and timer
+> /// interrupts.
+> pub const CLINT_BASE: u64 = 0x200_0000;
+> /// The size of CLINT.
+> pub const CLINT_SIZE: u64 = 0x10000;
+> 
+> /// The address which the platform-level interrupt controller (PLIC) starts. The PLIC connects all external interrupts in the
+> /// system to all hart contexts in the system, via the external interrupt source in each hart.
+> pub const PLIC_BASE: u64 = 0xc00_0000;
+> /// The size of PLIC.
+> pub const PLIC_SIZE: u64 = 0x4000000;
+> 
+16a32,33
+>     clint: Clint,
+>     plic: Plic,
+23a41,42
+>             clint: Clint::new(),
+>             plic: Plic::new(),
+28a48,53
+>         if CLINT_BASE <= addr && addr < CLINT_BASE + CLINT_SIZE {
+>             return self.clint.load(addr, size);
+>         }
+>         if PLIC_BASE <= addr && addr < PLIC_BASE + PLIC_SIZE {
+>             return self.plic.load(addr, size);
+>         }
+35a61,66
+>         if CLINT_BASE <= addr && addr < CLINT_BASE + CLINT_SIZE {
+>             return self.clint.store(addr, size, value);
+>         }
+>         if PLIC_BASE <= addr && addr < PLIC_BASE + PLIC_SIZE {
+>             return self.plic.store(addr, size, value);
+>         }
+Only in step06/src: clint.rs
+diff -x target -r step05/src/main.rs step06/src/main.rs
+1a2
+> mod clint;
+3a5
+> mod plic;
+Only in step06/src: plic.rs

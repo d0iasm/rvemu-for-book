@@ -23,7 +23,7 @@ pub const PLIC_SIZE: u64 = 0x4000000;
 pub const MEMORY_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
-    fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception>;
+    fn load(&self, addr: u64, size: u64) -> Result<u64, Exception>;
     fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception>;
 }
 
@@ -44,7 +44,7 @@ impl Bus {
         }
     }
 
-    pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
+    pub fn load(&self, addr: u64, size: u64) -> Result<u64, Exception> {
         if CLINT_BASE <= addr && addr < CLINT_BASE + CLINT_SIZE {
             return self.clint.load(addr, size);
         }
@@ -54,7 +54,6 @@ impl Bus {
         if MEMORY_BASE <= addr {
             return self.memory.load(addr, size);
         }
-        println!("load {:#x} {}", addr, size);
         Err(Exception::LoadAccessFault)
     }
 

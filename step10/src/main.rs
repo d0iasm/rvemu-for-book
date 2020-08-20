@@ -55,8 +55,9 @@ fn main() -> io::Result<()> {
             Ok(_) => {}
             Err(exception) => {
                 exception.take_trap(&mut cpu);
-                println!("exception: {:?}", exception);
-                break;
+                // TODO: Break this loop if an exception is a certain kind.
+                //println!("exception: {:?}", exception);
+                //break;
             }
         }
 

@@ -1,0 +1,184 @@
+diff -x target -r step02/Cargo.lock step03/Cargo.lock
+4c4
+< name = "step2-rvemu-for-book"
+---
+> name = "step3-rvemu-for-book"
+diff -x target -r step02/Cargo.toml step03/Cargo.toml
+2c2
+< name = "step2-rvemu-for-book"
+---
+> name = "step3-rvemu-for-book"
+Only in step03: csr
+Only in step03: csr.bin
+Only in step03: csr.s
+Only in step02: fib
+Only in step02: fib.bin
+Only in step02: fib.c
+Only in step02: fib.s
+diff -x target -r step02/Makefile step03/Makefile
+1,4c1,3
+< fib.bin: fib.c
+< 	riscv64-unknown-elf-gcc -S fib.c
+< 	riscv64-unknown-elf-gcc -Wl,-Ttext=0x0 -nostdlib -o fib fib.s
+< 	riscv64-unknown-elf-objcopy -O binary fib fib.bin
+---
+> csr.bin: csr.s
+> 	riscv64-unknown-elf-gcc -Wl,-Ttext=0x0 -nostdlib -o csr csr.s
+> 	riscv64-unknown-elf-objcopy -O binary csr csr.bin
+7,8c6,7
+< 	rm -f fib
+< 	rm -f fib.bin
+---
+> 	rm -f csr
+> 	rm -f csr.bin
+diff -x target -r step02/src/cpu.rs step03/src/cpu.rs
+7a8,53
+> // Machine-level CSRs.
+> /// Hardware thread ID.
+> pub const MHARTID: usize = 0xf14;
+> /// Machine status register.
+> pub const MSTATUS: usize = 0x300;
+> /// Machine exception delefation register.
+> pub const MEDELEG: usize = 0x302;
+> /// Machine interrupt delefation register.
+> pub const MIDELEG: usize = 0x303;
+> /// Machine interrupt-enable register.
+> pub const MIE: usize = 0x304;
+> /// Machine trap-handler base address.
+> pub const MTVEC: usize = 0x305;
+> /// Machine counter enable.
+> pub const MCOUNTEREN: usize = 0x306;
+> /// Scratch register for machine trap handlers.
+> pub const MSCRATCH: usize = 0x340;
+> /// Machine exception program counter.
+> pub const MEPC: usize = 0x341;
+> /// Machine trap cause.
+> pub const MCAUSE: usize = 0x342;
+> /// Machine bad address or instruction.
+> pub const MTVAL: usize = 0x343;
+> /// Machine interrupt pending.
+> pub const MIP: usize = 0x344;
+> 
+> // Supervisor-level CSRs.
+> /// Supervisor status register.
+> pub const SSTATUS: usize = 0x100;
+> /// Supervisor interrupt-enable register.
+> pub const SIE: usize = 0x104;
+> /// Supervisor trap handler base address.
+> pub const STVEC: usize = 0x105;
+> /// Scratch register for supervisor trap handlers.
+> pub const SSCRATCH: usize = 0x140;
+> /// Supervisor exception program counter.
+> pub const SEPC: usize = 0x141;
+> /// Supervisor trap cause.
+> pub const SCAUSE: usize = 0x142;
+> /// Supervisor bad address or instruction.
+> pub const STVAL: usize = 0x143;
+> /// Supervisor interrupt pending.
+> pub const SIP: usize = 0x144;
+> /// Supervisor address translation and protection.
+> pub const SATP: usize = 0x180;
+> 
+16a63,65
+>     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
+>     /// up to 4096 CSRs.
+>     pub csrs: [u64; 4096],
+30a80
+>             csrs: [0; 4096],
+65a116,156
+>     /// Print values in some csrs.
+>     pub fn dump_csrs(&self) {
+>         let output = format!(
+>             "{}\n{}",
+>             format!(
+>                 "mstatus={:>#18x} mtvec={:>#18x} mepc={:>#18x} mcause={:>#18x}",
+>                 self.load_csr(MSTATUS),
+>                 self.load_csr(MTVEC),
+>                 self.load_csr(MEPC),
+>                 self.load_csr(MCAUSE),
+>             ),
+>             format!(
+>                 "sstatus={:>#18x} stvec={:>#18x} sepc={:>#18x} scause={:>#18x}",
+>                 self.load_csr(SSTATUS),
+>                 self.load_csr(STVEC),
+>                 self.load_csr(SEPC),
+>                 self.load_csr(SCAUSE),
+>             ),
+>         );
+>         println!("{}", output);
+>     }
+> 
+>     /// Load a value from a CSR.
+>     pub fn load_csr(&self, addr: usize) -> u64 {
+>         match addr {
+>             SIE => self.csrs[MIE] & self.csrs[MIDELEG],
+>             _ => self.csrs[addr],
+>         }
+>     }
+> 
+>     /// Store a value to a CSR.
+>     pub fn store_csr(&mut self, addr: usize, value: u64) {
+>         match addr {
+>             SIE => {
+>                 self.csrs[MIE] =
+>                     (self.csrs[MIE] & !self.csrs[MIDELEG]) | (value & self.csrs[MIDELEG]);
+>             }
+>             _ => self.csrs[addr] = value,
+>         }
+>     }
+> 
+431a523,572
+>             }
+>             0x73 => {
+>                 let csr_addr = ((inst & 0xfff00000) >> 20) as usize;
+>                 match funct3 {
+>                     0x1 => {
+>                         // csrrw
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, self.regs[rs1]);
+>                         self.regs[rd] = t;
+>                     }
+>                     0x2 => {
+>                         // csrrs
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t | self.regs[rs1]);
+>                         self.regs[rd] = t;
+>                     }
+>                     0x3 => {
+>                         // csrrc
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t & (!self.regs[rs1]));
+>                         self.regs[rd] = t;
+>                     }
+>                     0x5 => {
+>                         // csrrwi
+>                         let zimm = rs1 as u64;
+>                         self.regs[rd] = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, zimm);
+>                     }
+>                     0x6 => {
+>                         // csrrsi
+>                         let zimm = rs1 as u64;
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t | zimm);
+>                         self.regs[rd] = t;
+>                     }
+>                     0x7 => {
+>                         // csrrci
+>                         let zimm = rs1 as u64;
+>                         let t = self.load_csr(csr_addr);
+>                         self.store_csr(csr_addr, t & (!zimm));
+>                         self.regs[rd] = t;
+>                     }
+>                     _ => {
+>                         println!(
+>                             "not implemented yet: opcode {:#x} funct3 {:#x}",
+>                             opcode, funct3
+>                         );
+>                         return Err(());
+>                     }
+>                 }
+diff -x target -r step02/src/main.rs step03/src/main.rs
+48a49,50
+>     println!("-----------------------------------------------------------------------------------------------------------");
+>     cpu.dump_csrs();

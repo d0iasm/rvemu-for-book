@@ -1,10 +1,12 @@
 //! The cpu module contains `Cpu` and implementarion for it.
 
+#![allow(dead_code)]
+
 use crate::bus::*;
 use crate::memory::*;
 
-/// The `Cpu` struct that contains registers, a program coutner, and system bus that connects
-/// peripheral devices.
+/// The `Cpu` struct that contains registers, a program coutner, system bus that connects
+/// peripheral devices, and control and status registers.
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],
@@ -12,8 +14,6 @@ pub struct Cpu {
     pub pc: u64,
     /// System bus that transfers data between CPU and peripheral devices.
     pub bus: Bus,
-    /// The size of executable binary.
-    pub codesize: u64,
 }
 
 impl Cpu {
@@ -23,33 +23,39 @@ impl Cpu {
         let mut regs = [0; 32];
         regs[2] = MEMORY_BASE + MEMORY_SIZE;
 
-        let codesize = binary.len() as u64;
-
         Self {
             regs,
             // The program counter starts from the start address of a memory.
             pc: MEMORY_BASE,
             bus: Bus::new(binary),
-            codesize,
         }
     }
 
     /// Print values in all registers (x0-x31).
     pub fn dump_registers(&self) {
         let mut output = String::from("");
+        let abi = [
+            "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0", "s1", "a0", "a1", "a2", "a3",
+            "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
+            "t3", "t4", "t5", "t6",
+        ];
         for i in (0..32).step_by(4) {
             output = format!(
                 "{}\n{}",
                 output,
                 format!(
-                    "x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x} x{:02}={:>#18x}",
+                    "x{:02}({})={:>#18x} x{:02}({})={:>#18x} x{:02}({})={:>#18x} x{:02}({})={:>#18x}",
                     i,
+                    abi[i],
                     self.regs[i],
                     i + 1,
+                    abi[i + 1],
                     self.regs[i + 1],
                     i + 2,
+                    abi[i + 2],
                     self.regs[i + 2],
                     i + 3,
+                    abi[i + 3],
                     self.regs[i + 3],
                 )
             );
@@ -57,9 +63,22 @@ impl Cpu {
         println!("{}", output);
     }
 
+    /// Load a value from a memory.
+    pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, ()> {
+        self.bus.load(addr, size)
+    }
+
+    /// Store a value to a memory.
+    pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
+        self.bus.store(addr, size, value)
+    }
+
     /// Get an instruction from the memory.
-    pub fn fetch(&self) -> Result<u64, ()> {
-        return self.bus.load(self.pc, 32);
+    pub fn fetch(&mut self) -> Result<u64, ()> {
+        match self.bus.load(self.pc, 32) {
+            Ok(inst) => Ok(inst),
+            Err(_e) => Err(()),
+        }
     }
 
     /// Execute an instruction after decoding. Return true if an error happens, otherwise false.
@@ -82,40 +101,46 @@ impl Cpu {
                 match funct3 {
                     0x0 => {
                         // lb
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val as i8 as i64 as u64;
                     }
                     0x1 => {
                         // lh
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val as i16 as i64 as u64;
                     }
                     0x2 => {
                         // lw
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val as i32 as i64 as u64;
                     }
                     0x3 => {
                         // ld
-                        let val = self.bus.load(addr, 64)?;
+                        let val = self.load(addr, 64)?;
                         self.regs[rd] = val;
                     }
                     0x4 => {
                         // lbu
-                        let val = self.bus.load(addr, 8)?;
+                        let val = self.load(addr, 8)?;
                         self.regs[rd] = val;
                     }
                     0x5 => {
                         // lhu
-                        let val = self.bus.load(addr, 16)?;
+                        let val = self.load(addr, 16)?;
                         self.regs[rd] = val;
                     }
                     0x6 => {
                         // lwu
-                        let val = self.bus.load(addr, 32)?;
+                        let val = self.load(addr, 32)?;
                         self.regs[rd] = val;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x13 => {
@@ -194,10 +219,22 @@ impl Cpu {
                                 self.regs[rd] =
                                     (self.regs[rs1] as i32).wrapping_shr(shamt) as i64 as u64;
                             }
-                            _ => {}
+                            _ => {
+                                println!(
+                                    "not implemented yet: opcode {:#x} funct7 {:#x}",
+                                    opcode, funct7
+                                );
+                                return Err(());
+                            }
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x23 => {
@@ -205,10 +242,10 @@ impl Cpu {
                 let imm = (((inst & 0xfe000000) as i32 as i64 >> 20) as u64) | ((inst >> 7) & 0x1f);
                 let addr = self.regs[rs1].wrapping_add(imm);
                 match funct3 {
-                    0x0 => self.bus.store(addr, 8, self.regs[rs2])?, // sb
-                    0x1 => self.bus.store(addr, 16, self.regs[rs2])?, // sh
-                    0x2 => self.bus.store(addr, 32, self.regs[rs2])?, // sw
-                    0x3 => self.bus.store(addr, 64, self.regs[rs2])?, // sd
+                    0x0 => self.store(addr, 8, self.regs[rs2])?,  // sb
+                    0x1 => self.store(addr, 16, self.regs[rs2])?, // sh
+                    0x2 => self.store(addr, 32, self.regs[rs2])?, // sw
+                    0x3 => self.store(addr, 64, self.regs[rs2])?, // sd
                     _ => {}
                 }
             }
@@ -221,6 +258,10 @@ impl Cpu {
                     (0x0, 0x00) => {
                         // add
                         self.regs[rd] = self.regs[rs1].wrapping_add(self.regs[rs2]);
+                    }
+                    (0x0, 0x01) => {
+                        // mul
+                        self.regs[rd] = self.regs[rs1].wrapping_mul(self.regs[rs2]);
                     }
                     (0x0, 0x20) => {
                         // sub
@@ -266,7 +307,13 @@ impl Cpu {
                         // and
                         self.regs[rd] = self.regs[rs1] & self.regs[rs2];
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x37 => {
@@ -299,7 +346,13 @@ impl Cpu {
                         // sraw
                         self.regs[rd] = ((self.regs[rs1] as i32) >> (shamt as i32)) as u64;
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            opcode, funct3, funct7
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x63 => {
@@ -346,11 +399,18 @@ impl Cpu {
                             self.pc = self.pc.wrapping_add(imm).wrapping_sub(4);
                         }
                     }
-                    _ => {}
+                    _ => {
+                        println!(
+                            "not implemented yet: opcode {:#x} funct3 {:#x}",
+                            opcode, funct3
+                        );
+                        return Err(());
+                    }
                 }
             }
             0x67 => {
                 // jalr
+                // Note: Don't add 4 because the pc already moved on.
                 let t = self.pc;
 
                 let imm = ((((inst & 0xfff00000) as i32) as i64) >> 20) as u64;

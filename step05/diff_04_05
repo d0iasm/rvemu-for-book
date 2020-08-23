@@ -8,6 +8,8 @@ diff -x target -r step04/Cargo.toml step05/Cargo.toml
 < name = "step4-rvemu-for-book"
 ---
 > name = "step5-rvemu-for-book"
+Only in step04: diff_03_04
+Only in step05: diff_04_05
 Only in step05: invalid.bin
 diff -x target -r step04/src/bus.rs step05/src/bus.rs
 4a5
@@ -140,21 +142,24 @@ diff -x target -r step04/src/main.rs step05/src/main.rs
 > mod trap;
 10a12
 > use crate::trap::*;
-29c31,35
+29c31,37
 <             Err(_) => break,
 ---
 >             Err(exception) => {
 >                 exception.take_trap(&mut cpu);
->                 println!("exception: {:?}", exception);
->                 break;
+>                 if exception.is_fatal() {
+>                     break;
+>                 }
+>                 0 // dummy instruction
 >             }
-40c46,50
+40c48,53
 <             Err(_) => break,
 ---
 >             Err(exception) => {
 >                 exception.take_trap(&mut cpu);
->                 println!("exception: {:?}", exception);
->                 break;
+>                 if exception.is_fatal() {
+>                     break;
+>                 }
 >             }
 diff -x target -r step04/src/memory.rs step05/src/memory.rs
 3a4

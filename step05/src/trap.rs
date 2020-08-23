@@ -159,3 +159,16 @@ impl Trap for Exception {
         }
     }
 }
+
+impl Exception {
+    pub fn is_fatal(&self) -> bool {
+        match self {
+            Exception::InstructionAddressMisaligned
+            | Exception::InstructionAccessFault
+            | Exception::LoadAccessFault
+            | Exception::StoreAMOAddressMisaligned
+            | Exception::StoreAMOAccessFault => true,
+            _ => false,
+        }
+    }
+}

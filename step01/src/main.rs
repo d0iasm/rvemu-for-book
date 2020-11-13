@@ -72,10 +72,10 @@ impl Cpu {
 
     /// Execute an instruction after decoding.
     fn execute(&mut self, inst: u32) {
-        let opcode = inst & 0x0000007f;
-        let rd = ((inst & 0x00000f80) >> 7) as usize;
-        let rs1 = ((inst & 0x000f8000) >> 15) as usize;
-        let rs2 = ((inst & 0x01f00000) >> 20) as usize;
+        let opcode = inst & 0x7f;
+        let rd = ((inst >> 7) & 0x1f) as usize;
+        let rs1 = ((inst >> 15) & 0x1f) as usize;
+        let rs2 = ((inst >> 20) & 0x1f) as usize;
 
         // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;

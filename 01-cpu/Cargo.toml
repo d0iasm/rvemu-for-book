@@ -1,0 +1,7 @@
+[package]
+name = "rvemu-for-book-01"
+version = "0.1.0"
+authors = ["Asami Doi <@d0iasm>"]
+edition = "2018"
+
+[dependencies]

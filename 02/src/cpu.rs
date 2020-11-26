@@ -1,14 +1,14 @@
 //! The cpu module contains `Cpu` and implementarion for it.
 
 use crate::bus::*;
-use crate::memory::*;
+use crate::dram::*;
 
 /// The `Cpu` struct that contains registers, a program coutner, system bus that connects
 /// peripheral devices, and control and status registers.
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],
-    /// Program counter to hold the the memory address of the next instruction that would be executed.
+    /// Program counter to hold the the dram address of the next instruction that would be executed.
     pub pc: u64,
     /// System bus that transfers data between CPU and peripheral devices.
     pub bus: Bus,
@@ -23,7 +23,7 @@ impl Cpu {
 
         Self {
             regs,
-            // The program counter starts from the start address of a memory.
+            // The program counter starts from the start address of a dram.
             pc: MEMORY_BASE,
             bus: Bus::new(binary),
         }
@@ -61,17 +61,17 @@ impl Cpu {
         println!("{}", output);
     }
 
-    /// Load a value from a memory.
+    /// Load a value from a dram.
     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, ()> {
         self.bus.load(addr, size)
     }
 
-    /// Store a value to a memory.
+    /// Store a value to a dram.
     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
         self.bus.store(addr, size, value)
     }
 
-    /// Get an instruction from the memory.
+    /// Get an instruction from the dram.
     pub fn fetch(&mut self) -> Result<u64, ()> {
         match self.bus.load(self.pc, 32) {
             Ok(inst) => Ok(inst),

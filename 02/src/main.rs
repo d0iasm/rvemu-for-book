@@ -1,6 +1,6 @@
 mod bus;
 mod cpu;
-mod memory;
+mod dram;
 
 use std::env;
 use std::fs::File;
@@ -16,10 +16,10 @@ fn main() -> io::Result<()> {
         panic!("Usage: rvemu-for-book <filename>");
     }
     let mut file = File::open(&args[1])?;
-    let mut binary = Vec::new();
-    file.read_to_end(&mut binary)?;
+    let mut code = Vec::new();
+    file.read_to_end(&mut code)?;
 
-    let mut cpu = Cpu::new(binary);
+    let mut cpu = Cpu::new(code);
 
     loop {
         // 1. Fetch.

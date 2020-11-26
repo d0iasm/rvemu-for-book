@@ -3,29 +3,30 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-/// Default memory size (128MiB).
-pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
+/// Default DRAM size (128MiB).
+pub const DRAM_SIZE: u64 = 1024 * 1024 * 128;
 
-/// The CPU to contain registers, a program coutner, and memory.
+/// The CPU to contain registers, a program coutner, and DRAM.
 struct Cpu {
     /// 32 64-bit integer registers.
     regs: [u64; 32],
-    /// Program counter to hold the the memory address of the next instruction that would be executed.
+    /// Program counter to hold the the memory address of the next instruction that would be
+    /// executed.
     pc: u64,
     /// Computer memory to store executable instructions.
-    memory: Vec<u8>,
+    dram: Vec<u8>,
 }
 
 impl Cpu {
     /// Create a new `Cpu` object.
-    fn new(binary: Vec<u8>) -> Self {
+    fn new(code: Vec<u8>) -> Self {
         let mut regs = [0; 32];
-        regs[2] = MEMORY_SIZE;
+        regs[2] = DRAM_SIZE;
 
         Self {
             regs,
             pc: 0,
-            memory: binary,
+            dram: code,
         }
     }
 
@@ -61,13 +62,13 @@ impl Cpu {
         println!("{}", output);
     }
 
-    /// Get an instruction from the memory.
+    /// Get an instruction from the dram.
     fn fetch(&self) -> u32 {
         let index = self.pc as usize;
-        return (self.memory[index] as u32)
-            | ((self.memory[index + 1] as u32) << 8)
-            | ((self.memory[index + 2] as u32) << 16)
-            | ((self.memory[index + 3] as u32) << 24);
+        return (self.dram[index] as u32)
+            | ((self.dram[index + 1] as u32) << 8)
+            | ((self.dram[index + 2] as u32) << 16)
+            | ((self.dram[index + 3] as u32) << 24);
     }
 
     /// Execute an instruction after decoding.
@@ -104,12 +105,12 @@ fn main() -> io::Result<()> {
         panic!("Usage: rvemu-for-book <filename>");
     }
     let mut file = File::open(&args[1])?;
-    let mut binary = Vec::new();
-    file.read_to_end(&mut binary)?;
+    let mut code = Vec::new();
+    file.read_to_end(&mut code)?;
 
-    let mut cpu = Cpu::new(binary);
+    let mut cpu = Cpu::new(code);
 
-    while cpu.pc < cpu.memory.len() as u64 {
+    while cpu.pc < cpu.dram.len() as u64 {
         // 1. Fetch.
         let inst = cpu.fetch();
 

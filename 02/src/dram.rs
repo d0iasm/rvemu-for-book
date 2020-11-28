@@ -3,7 +3,7 @@
 use crate::bus::*;
 
 /// Default dram size (128MiB).
-pub const MEMORY_SIZE: u64 = 1024 * 1024 * 128;
+pub const DRAM_SIZE: u64 = 1024 * 1024 * 128;
 
 /// The dynamic random access dram (DRAM).
 #[derive(Debug)]
@@ -14,7 +14,7 @@ pub struct Dram {
 impl Dram {
     /// Create a new `Dram` instance with default dram size.
     pub fn new(code: Vec<u8>) -> Dram {
-        let mut dram = vec![0; MEMORY_SIZE as usize];
+        let mut dram = vec![0; DRAM_SIZE as usize];
         dram.splice(..code.len(), code.iter().cloned());
 
         Self { dram }
@@ -44,19 +44,19 @@ impl Dram {
 
     /// Load a byte from the little-endian dram.
     fn load8(&self, addr: u64) -> u64 {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         self.dram[index] as u64
     }
 
     /// Load 2 bytes from the little-endian dram.
     fn load16(&self, addr: u64) -> u64 {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         return (self.dram[index] as u64) | ((self.dram[index + 1] as u64) << 8);
     }
 
     /// Load 4 bytes from the little-endian dram.
     fn load32(&self, addr: u64) -> u64 {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         return (self.dram[index] as u64)
             | ((self.dram[index + 1] as u64) << 8)
             | ((self.dram[index + 2] as u64) << 16)
@@ -65,7 +65,7 @@ impl Dram {
 
     /// Load 8 bytes from the little-endian dram.
     fn load64(&self, addr: u64) -> u64 {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         return (self.dram[index] as u64)
             | ((self.dram[index + 1] as u64) << 8)
             | ((self.dram[index + 2] as u64) << 16)
@@ -78,20 +78,20 @@ impl Dram {
 
     /// Store a byte to the little-endian dram.
     fn store8(&mut self, addr: u64, value: u64) {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         self.dram[index] = value as u8
     }
 
     /// Store 2 bytes to the little-endian dram.
     fn store16(&mut self, addr: u64, value: u64) {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         self.dram[index] = (value & 0xff) as u8;
         self.dram[index + 1] = ((value >> 8) & 0xff) as u8;
     }
 
     /// Store 4 bytes to the little-endian dram.
     fn store32(&mut self, addr: u64, value: u64) {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         self.dram[index] = (value & 0xff) as u8;
         self.dram[index + 1] = ((value >> 8) & 0xff) as u8;
         self.dram[index + 2] = ((value >> 16) & 0xff) as u8;
@@ -100,7 +100,7 @@ impl Dram {
 
     /// Store 8 bytes to the little-endian dram.
     fn store64(&mut self, addr: u64, value: u64) {
-        let index = (addr - MEMORY_BASE) as usize;
+        let index = (addr - DRAM_BASE) as usize;
         self.dram[index] = (value & 0xff) as u8;
         self.dram[index + 1] = ((value >> 8) & 0xff) as u8;
         self.dram[index + 2] = ((value >> 16) & 0xff) as u8;

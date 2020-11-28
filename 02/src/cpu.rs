@@ -81,12 +81,12 @@ impl Cpu {
 
     /// Execute an instruction after decoding. Return true if an error happens, otherwise false.
     pub fn execute(&mut self, inst: u64) -> Result<(), ()> {
-        let opcode = inst & 0x0000007f;
-        let rd = ((inst & 0x00000f80) >> 7) as usize;
-        let rs1 = ((inst & 0x000f8000) >> 15) as usize;
-        let rs2 = ((inst & 0x01f00000) >> 20) as usize;
-        let funct3 = (inst & 0x00007000) >> 12;
-        let funct7 = (inst & 0xfe000000) >> 25;
+        let opcode = inst & 0x7f;
+        let rd = ((inst >> 7) & 0x1f) as usize;
+        let rs1 = ((inst >> 15) & 0x1f) as usize;
+        let rs2 = ((inst >> 20) & 0x1f) as usize;
+        let funct3 = ((inst >> 12) & 0x7);
+        let funct7 = ((inst >> 25) & 0x7f);
 
         // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;

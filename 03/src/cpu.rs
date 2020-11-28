@@ -58,11 +58,11 @@ pub struct Cpu {
     pub regs: [u64; 32],
     /// Program counter to hold the the dram address of the next instruction that would be executed.
     pub pc: u64,
-    /// System bus that transfers data between CPU and peripheral devices.
-    pub bus: Bus,
     /// Control and status registers. RISC-V ISA sets aside a 12-bit encoding space (csr[11:0]) for
     /// up to 4096 CSRs.
     pub csrs: [u64; 4096],
+    /// System bus that transfers data between CPU and peripheral devices.
+    pub bus: Bus,
 }
 
 impl Cpu {
@@ -76,8 +76,8 @@ impl Cpu {
             regs,
             // The program counter starts from the start address of a dram.
             pc: DRAM_BASE,
-            bus: Bus::new(binary),
             csrs: [0; 4096],
+            bus: Bus::new(binary),
         }
     }
 

@@ -19,12 +19,12 @@ impl Cpu {
     pub fn new(binary: Vec<u8>) -> Self {
         // The stack pointer (SP) must be set up at first.
         let mut regs = [0; 32];
-        regs[2] = MEMORY_BASE + MEMORY_SIZE;
+        regs[2] = DRAM_BASE + DRAM_SIZE;
 
         Self {
             regs,
             // The program counter starts from the start address of a dram.
-            pc: MEMORY_BASE,
+            pc: DRAM_BASE,
             bus: Bus::new(binary),
         }
     }
@@ -85,8 +85,8 @@ impl Cpu {
         let rd = ((inst >> 7) & 0x1f) as usize;
         let rs1 = ((inst >> 15) & 0x1f) as usize;
         let rs2 = ((inst >> 20) & 0x1f) as usize;
-        let funct3 = ((inst >> 12) & 0x7);
-        let funct7 = ((inst >> 25) & 0x7f);
+        let funct3 = (inst >> 12) & 0x7;
+        let funct7 = (inst >> 25) & 0x7f;
 
         // Emulate that register x0 is hardwired with all bits equal to 0.
         self.regs[0] = 0;

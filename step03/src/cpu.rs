@@ -70,12 +70,12 @@ impl Cpu {
     pub fn new(binary: Vec<u8>) -> Self {
         // The stack pointer (SP) must be set up at first.
         let mut regs = [0; 32];
-        regs[2] = MEMORY_BASE + MEMORY_SIZE;
+        regs[2] = DRAM_BASE + DRAM_SIZE;
 
         Self {
             regs,
             // The program counter starts from the start address of a memory.
-            pc: MEMORY_BASE,
+            pc: DRAM_BASE,
             bus: Bus::new(binary),
             csrs: [0; 4096],
         }

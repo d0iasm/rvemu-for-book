@@ -32,7 +32,7 @@ pub const VIRTIO_BASE: u64 = 0x1000_1000;
 pub const VIRTIO_SIZE: u64 = 0x1000;
 
 /// The address which memory starts, same as QEMU virt machine.
-pub const MEMORY_BASE: u64 = 0x8000_0000;
+pub const DRAM_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception>;
@@ -73,7 +73,7 @@ impl Bus {
         if VIRTIO_BASE <= addr && addr < VIRTIO_BASE + VIRTIO_SIZE {
             return self.virtio.load(addr, size);
         }
-        if MEMORY_BASE <= addr {
+        if DRAM_BASE <= addr {
             return self.memory.load(addr, size);
         }
         Err(Exception::LoadAccessFault)
@@ -92,7 +92,7 @@ impl Bus {
         if VIRTIO_BASE <= addr && addr < VIRTIO_BASE + VIRTIO_SIZE {
             return self.virtio.store(addr, size, value);
         }
-        if MEMORY_BASE <= addr {
+        if DRAM_BASE <= addr {
             return self.memory.store(addr, size, value);
         }
         Err(Exception::StoreAMOAccessFault)

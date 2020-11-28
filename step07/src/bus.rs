@@ -26,7 +26,7 @@ pub const UART_BASE: u64 = 0x1000_0000;
 pub const UART_SIZE: u64 = 0x100;
 
 /// The address which memory starts, same as QEMU virt machine.
-pub const MEMORY_BASE: u64 = 0x8000_0000;
+pub const DRAM_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
     fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception>;
@@ -62,7 +62,7 @@ impl Bus {
         if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
             return self.uart.load(addr, size);
         }
-        if MEMORY_BASE <= addr {
+        if DRAM_BASE <= addr {
             return self.memory.load(addr, size);
         }
         Err(Exception::LoadAccessFault)
@@ -78,7 +78,7 @@ impl Bus {
         if UART_BASE <= addr && addr < UART_BASE + UART_SIZE {
             return self.uart.store(addr, size, value);
         }
-        if MEMORY_BASE <= addr {
+        if DRAM_BASE <= addr {
             return self.memory.store(addr, size, value);
         }
         Err(Exception::StoreAMOAccessFault)

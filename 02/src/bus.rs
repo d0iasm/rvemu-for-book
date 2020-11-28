@@ -1,4 +1,4 @@
-//! The bus module contains the system bus which can access the memroy or dram-mapped peripheral
+//! The bus module contains the system bus which can access the memroy or memory-mapped peripheral
 //! devices.
 
 use crate::dram::*;

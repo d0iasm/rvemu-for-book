@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use crate::bus::*;
-use crate::memory::*;
+use crate::dram::*;
 
 // Machine-level CSRs.
 /// Hardware thread ID.
@@ -64,7 +64,7 @@ pub enum Mode {
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],
-    /// Program counter to hold the the memory address of the next instruction that would be executed.
+    /// Program counter to hold the the dram address of the next instruction that would be executed.
     pub pc: u64,
     /// The current privilege mode.
     pub mode: Mode,
@@ -84,7 +84,7 @@ impl Cpu {
 
         Self {
             regs,
-            // The program counter starts from the start address of a memory.
+            // The program counter starts from the start address of a dram.
             pc: DRAM_BASE,
             mode: Mode::Machine,
             bus: Bus::new(binary),
@@ -165,17 +165,17 @@ impl Cpu {
         }
     }
 
-    /// Load a value from a memory.
+    /// Load a value from a dram.
     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, ()> {
         self.bus.load(addr, size)
     }
 
-    /// Store a value to a memory.
+    /// Store a value to a dram.
     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), ()> {
         self.bus.store(addr, size, value)
     }
 
-    /// Get an instruction from the memory.
+    /// Get an instruction from the dram.
     pub fn fetch(&mut self) -> Result<u64, ()> {
         match self.bus.load(self.pc, 32) {
             Ok(inst) => Ok(inst),

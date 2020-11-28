@@ -3,13 +3,13 @@
 #![allow(dead_code)]
 
 use crate::bus::*;
-use crate::memory::*;
+use crate::dram::*;
 use crate::plic::*;
 use crate::trap::*;
 use crate::uart::*;
 use crate::virtio::*;
 
-/// The page size (4 KiB) for the virtual memory system.
+/// The page size (4 KiB) for the virtual dram system.
 const PAGE_SIZE: u64 = 4096;
 
 // Machine-level CSRs.
@@ -91,7 +91,7 @@ pub enum AccessType {
 pub struct Cpu {
     /// 32 64-bit integer registers.
     pub regs: [u64; 32],
-    /// Program counter to hold the the memory address of the next instruction that would be executed.
+    /// Program counter to hold the the dram address of the next instruction that would be executed.
     pub pc: u64,
     /// The current privilege mode.
     pub mode: Mode,
@@ -115,7 +115,7 @@ impl Cpu {
 
         Self {
             regs,
-            // The program counter starts from the start address of a memory.
+            // The program counter starts from the start address of a dram.
             pc: DRAM_BASE,
             mode: Mode::Machine,
             bus: Bus::new(binary, disk_image),
@@ -204,7 +204,7 @@ impl Cpu {
         if self.bus.uart.is_interrupting() {
             irq = UART_IRQ;
         } else if self.bus.virtio.is_interrupting() {
-            // Access disk by direct memory access (DMA). An interrupt is raised after a disk
+            // Access disk by direct dram access (DMA). An interrupt is raised after a disk
             // access is done.
             Virtio::disk_access(self);
             irq = VIRTIO_IRQ;
@@ -277,7 +277,7 @@ impl Cpu {
         }
     }
 
-    /// Translate a virtual address to a physical address for the paged virtual-memory system.
+    /// Translate a virtual address to a physical address for the paged virtual-dram system.
     pub fn translate(&mut self, addr: u64, access_type: AccessType) -> Result<u64, Exception> {
         if !self.enable_paging {
             return Ok(addr);
@@ -348,7 +348,7 @@ impl Cpu {
 
         // We skip implementing from step 5 to 7.
 
-        // "5. A leaf PTE has been found. Determine if the requested memory access is allowed by
+        // "5. A leaf PTE has been found. Determine if the requested dram access is allowed by
         //     the pte.r, pte.w, pte.x, and pte.u bits, given the current privilege mode and the
         //     value of the SUM and MXR fields of the mstatus register. If not, stop and raise a
         //     page-fault exception corresponding to the original access type."
@@ -356,9 +356,9 @@ impl Cpu {
         // "6. If i > 0 and pte.ppn[i − 1 : 0] ̸= 0, this is a misaligned superpage; stop and
         //     raise a page-fault exception corresponding to the original access type."
 
-        // "7. If pte.a = 0, or if the memory access is a store and pte.d = 0, either raise a
+        // "7. If pte.a = 0, or if the dram access is a store and pte.d = 0, either raise a
         //     page-fault exception corresponding to the original access type, or:
-        //     • Set pte.a to 1 and, if the memory access is a store, also set pte.d to 1.
+        //     • Set pte.a to 1 and, if the dram access is a store, also set pte.d to 1.
         //     • If this access violates a PMA or PMP check, raise an access exception
         //     corresponding to the original access type.
         //     • This update and the loading of pte in step 2 must be atomic; in particular, no
@@ -377,12 +377,12 @@ impl Cpu {
                 Ok((ppn << 12) | offset)
             }
             1 => {
-                // Superpage translation. A superpage is a memory page of larger size than an
+                // Superpage translation. A superpage is a dram page of larger size than an
                 // ordinary page (4 KiB). It reduces TLB misses and improves performance.
                 Ok((ppn[2] << 30) | (ppn[1] << 21) | (vpn[0] << 12) | offset)
             }
             2 => {
-                // Superpage translation. A superpage is a memory page of larger size than an
+                // Superpage translation. A superpage is a dram page of larger size than an
                 // ordinary page (4 KiB). It reduces TLB misses and improves performance.
                 Ok((ppn[2] << 30) | (vpn[1] << 21) | (vpn[0] << 12) | offset)
             }
@@ -413,19 +413,19 @@ impl Cpu {
         }
     }
 
-    /// Load a value from a memory.
+    /// Load a value from a dram.
     pub fn load(&mut self, addr: u64, size: u64) -> Result<u64, Exception> {
         let p_addr = self.translate(addr, AccessType::Load)?;
         self.bus.load(p_addr, size)
     }
 
-    /// Store a value to a memory.
+    /// Store a value to a dram.
     pub fn store(&mut self, addr: u64, size: u64, value: u64) -> Result<(), Exception> {
         let p_addr = self.translate(addr, AccessType::Store)?;
         self.bus.store(p_addr, size, value)
     }
 
-    /// Get an instruction from the memory.
+    /// Get an instruction from the dram.
     pub fn fetch(&mut self) -> Result<u64, Exception> {
         let p_pc = self.translate(self.pc, AccessType::Instruction)?;
         match self.bus.load(p_pc, 32) {

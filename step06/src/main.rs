@@ -1,7 +1,7 @@
 mod bus;
 mod clint;
 mod cpu;
-mod memory;
+mod dram;
 mod plic;
 mod trap;
 

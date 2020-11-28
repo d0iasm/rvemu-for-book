@@ -1,6 +1,6 @@
 mod bus;
 mod cpu;
-mod memory;
+mod dram;
 
 use std::env;
 use std::fs::File;

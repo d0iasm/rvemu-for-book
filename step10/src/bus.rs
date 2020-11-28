@@ -2,7 +2,7 @@
 //! devices.
 
 use crate::clint::*;
-use crate::memory::*;
+use crate::dram::*;
 use crate::plic::*;
 use crate::trap::*;
 use crate::uart::*;
@@ -31,7 +31,7 @@ pub const VIRTIO_BASE: u64 = 0x1000_1000;
 /// The size of virtio.
 pub const VIRTIO_SIZE: u64 = 0x1000;
 
-/// The address which memory starts, same as QEMU virt machine.
+/// The address which dram starts, same as QEMU virt machine.
 pub const DRAM_BASE: u64 = 0x8000_0000;
 
 pub trait Device {
@@ -45,7 +45,7 @@ pub struct Bus {
     plic: Plic,
     pub uart: Uart,
     pub virtio: Virtio,
-    memory: Memory,
+    dram: Dram,
 }
 
 impl Bus {
@@ -56,7 +56,7 @@ impl Bus {
             plic: Plic::new(),
             uart: Uart::new(),
             virtio: Virtio::new(disk_image),
-            memory: Memory::new(binary),
+            dram: Dram::new(binary),
         }
     }
 
@@ -74,7 +74,7 @@ impl Bus {
             return self.virtio.load(addr, size);
         }
         if DRAM_BASE <= addr {
-            return self.memory.load(addr, size);
+            return self.dram.load(addr, size);
         }
         Err(Exception::LoadAccessFault)
     }
@@ -93,7 +93,7 @@ impl Bus {
             return self.virtio.store(addr, size, value);
         }
         if DRAM_BASE <= addr {
-            return self.memory.store(addr, size, value);
+            return self.dram.store(addr, size, value);
         }
         Err(Exception::StoreAMOAccessFault)
     }

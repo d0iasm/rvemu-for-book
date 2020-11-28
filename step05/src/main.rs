@@ -1,6 +1,6 @@
 mod bus;
 mod cpu;
-mod memory;
+mod dram;
 mod trap;
 
 use std::env;

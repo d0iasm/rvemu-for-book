@@ -5,7 +5,7 @@
 use crate::bus::*;
 use crate::trap::*;
 
-/// The address of a mtimecmp register starts. A mtimecmp is a memory mapped machine mode timer
+/// The address of a mtimecmp register starts. A mtimecmp is a dram mapped machine mode timer
 /// compare register, used to trigger an interrupt when mtimecmp is greater than or equal to mtime.
 pub const CLINT_MTIMECMP: u64 = CLINT_BASE + 0x4000;
 /// The address of a timer register. A mtime is a machine mode timer register which runs at a

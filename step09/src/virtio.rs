@@ -150,7 +150,7 @@ impl Virtio {
     }
 
     /// Access the disk via virtio. This is an associated function which takes a `cpu` object to
-    /// read and write with a memory directly (DMA).
+    /// read and write with a dram directly (DMA).
     pub fn disk_access(cpu: &mut Cpu) {
         // See more information in
         // https://github.com/mit-pdos/xv6-riscv/blob/riscv/kernel/virtio_disk.c
@@ -230,22 +230,22 @@ impl Virtio {
         // Write to a device if the second bit `flag1` is set.
         match (flags1 & 2) == 0 {
             true => {
-                // Read memory data and write it to a disk directly (DMA).
+                // Read dram data and write it to a disk directly (DMA).
                 for i in 0..len1 as u64 {
                     let data = cpu
                         .bus
                         .load(addr1 + i, 8)
-                        .expect("failed to read from memory");
+                        .expect("failed to read from dram");
                     cpu.bus.virtio.write_disk(blk_sector * 512 + i, data);
                 }
             }
             false => {
-                // Read disk data and write it to memory directly (DMA).
+                // Read disk data and write it to dram directly (DMA).
                 for i in 0..len1 as u64 {
                     let data = cpu.bus.virtio.read_disk(blk_sector * 512 + i);
                     cpu.bus
                         .store(addr1 + i, 8, data)
-                        .expect("failed to write to memory");
+                        .expect("failed to write to dram");
                 }
             }
         };
@@ -259,6 +259,6 @@ impl Virtio {
         let new_id = cpu.bus.virtio.get_new_id();
         cpu.bus
             .store(used_addr.wrapping_add(2), 16, new_id % 8)
-            .expect("failed to write to memory");
+            .expect("failed to write to dram");
     }
 }

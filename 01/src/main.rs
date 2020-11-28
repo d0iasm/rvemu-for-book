@@ -10,10 +10,10 @@ pub const DRAM_SIZE: u64 = 1024 * 1024 * 128;
 struct Cpu {
     /// 32 64-bit integer registers.
     regs: [u64; 32],
-    /// Program counter to hold the the memory address of the next instruction that would be
+    /// Program counter to hold the the dram address of the next instruction that would be
     /// executed.
     pc: u64,
-    /// Computer memory to store executable instructions.
+    /// Computer dram to store executable instructions.
     dram: Vec<u8>,
 }
 

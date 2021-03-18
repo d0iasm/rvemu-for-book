@@ -1,0 +1,11 @@
+[package]
+name = "rvemu-for-book"
+version = "0.1.0"
+authors = ["Asami Doi"]
+edition = "2018"
+
+[lib]
+name = "rvemu"
+path = "src/lib.rs"
+
+[dependencies]

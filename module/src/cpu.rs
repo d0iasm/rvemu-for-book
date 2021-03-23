@@ -348,10 +348,7 @@ impl Cpu {
                         self.regs[rd] = val;
                     }
                     _ => {
-                        println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x}",
-                            opcode, funct3
-                        );
+                        println!("not implemented: opcode {:#x} funct3 {:#x}", opcode, funct3);
                         return Err(Exception::IllegalInstruction);
                     }
                 }
@@ -362,10 +359,7 @@ impl Cpu {
                 match funct3 {
                     0x0 => {} // fence
                     _ => {
-                        println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x}",
-                            opcode, funct3
-                        );
+                        println!("not implemented: opcode {:#x} funct3 {:#x}", opcode, funct3);
                         return Err(Exception::IllegalInstruction);
                     }
                 }
@@ -448,7 +442,7 @@ impl Cpu {
                             }
                             _ => {
                                 println!(
-                                    "not implemented yet: opcode {:#x} funct7 {:#x}",
+                                    "not implemented: opcode {:#x} funct7 {:#x}",
                                     opcode, funct7
                                 );
                                 return Err(Exception::IllegalInstruction);
@@ -456,10 +450,7 @@ impl Cpu {
                         }
                     }
                     _ => {
-                        println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x}",
-                            opcode, funct3
-                        );
+                        println!("not implemented: opcode {:#x} funct3 {:#x}", opcode, funct3);
                         return Err(Exception::IllegalInstruction);
                     }
                 }
@@ -508,7 +499,7 @@ impl Cpu {
                     }
                     _ => {
                         println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            "not implemented: opcode {:#x} funct3 {:#x} funct7 {:#x}",
                             opcode, funct3, funct7
                         );
                         return Err(Exception::IllegalInstruction);
@@ -575,7 +566,7 @@ impl Cpu {
                     }
                     _ => {
                         println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            "not implemented: opcode {:#x} funct3 {:#x} funct7 {:#x}",
                             opcode, funct3, funct7
                         );
                         return Err(Exception::IllegalInstruction);
@@ -639,7 +630,7 @@ impl Cpu {
                     }
                     _ => {
                         println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                            "not implemented: opcode {:#x} funct3 {:#x} funct7 {:#x}",
                             opcode, funct3, funct7
                         );
                         return Err(Exception::IllegalInstruction);
@@ -691,10 +682,7 @@ impl Cpu {
                         }
                     }
                     _ => {
-                        println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x}",
-                            opcode, funct3
-                        );
+                        println!("not implemented: opcode {:#x} funct3 {:#x}", opcode, funct3);
                         return Err(Exception::IllegalInstruction);
                     }
                 }
@@ -814,7 +802,7 @@ impl Cpu {
                             }
                             _ => {
                                 println!(
-                                    "not implemented yet: opcode {:#x} funct3 {:#x} funct7 {:#x}",
+                                    "not implemented: opcode {:#x} funct3 {:#x} funct7 {:#x}",
                                     opcode, funct3, funct7
                                 );
                                 return Err(Exception::IllegalInstruction);
@@ -872,16 +860,13 @@ impl Cpu {
                         self.update_paging(csr_addr);
                     }
                     _ => {
-                        println!(
-                            "not implemented yet: opcode {:#x} funct3 {:#x}",
-                            opcode, funct3
-                        );
+                        println!("not implemented: opcode {:#x} funct3 {:#x}", opcode, funct3);
                         return Err(Exception::IllegalInstruction);
                     }
                 }
             }
             _ => {
-                dbg!(format!("not implemented yet: opcode {:#x}", opcode));
+                println!("not implemented: opcode {:#x}", opcode);
                 return Err(Exception::IllegalInstruction);
             }
         }

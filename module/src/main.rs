@@ -3,8 +3,8 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-use rvemu::cpu::*;
-use rvemu::trap::*;
+use rvemu::cpu::Cpu;
+use rvemu::trap::Trap;
 
 fn read_file(filename: &str) -> io::Result<Vec<u8>> {
     let mut file = File::open(filename)?;

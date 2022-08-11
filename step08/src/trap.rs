@@ -99,7 +99,7 @@ pub trait Trap {
             // instruction as described below. For other exceptions, stval is set to zero."
             cpu.store_csr(STVAL, 0);
 
-            // Set a privious interrupt-enable bit for supervisor mode (SPIE, 5) to the value
+            // Set a previous interrupt-enable bit for supervisor mode (SPIE, 5) to the value
             // of a global interrupt-enable bit for supervisor mode (SIE, 1).
             cpu.store_csr(
                 SSTATUS,
@@ -159,7 +159,7 @@ pub trait Trap {
             // instruction as described below. For other traps, mtval is set to zero."
             cpu.store_csr(MTVAL, 0);
 
-            // Set a privious interrupt-enable bit for supervisor mode (MPIE, 7) to the value
+            // Set a previous interrupt-enable bit for supervisor mode (MPIE, 7) to the value
             // of a global interrupt-enable bit for supervisor mode (MIE, 3).
             cpu.store_csr(
                 MSTATUS,
@@ -171,7 +171,7 @@ pub trait Trap {
             );
             // Set a global interrupt-enable bit for supervisor mode (MIE, 3) to 0.
             cpu.store_csr(MSTATUS, cpu.load_csr(MSTATUS) & !(1 << 3));
-            // Set a privious privilege mode for supervisor mode (MPP, 11..13) to 0.
+            // Set a previous privilege mode for supervisor mode (MPP, 11..13) to 0.
             cpu.store_csr(MSTATUS, cpu.load_csr(MSTATUS) & !(0b11 << 11));
         }
     }
